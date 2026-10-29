@@ -1,9 +1,12 @@
 import { timingSafeEqual } from 'node:crypto'
 import { Hono } from 'hono'
+import { generateText } from 'ai'
+import { neon } from '@neon/ai-sdk-provider'
 
 type Message = {
   message_id: number
   chat: { id: number }
+  text?: string
 }
 
 type Update = {
@@ -21,22 +24,36 @@ const isValidSecret = (received: string | undefined) => {
   return a.length === b.length && timingSafeEqual(a, b)
 }
 
-// Echo by copying the message back, so any kind (text, photo, sticker, voice...) is returned as-is
-const copyMessage = async (message: Message) => {
+const sendMessage = async (chatId: number, text: string) => {
   const res = await fetch(
-    `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/copyMessage`,
+    `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: message.chat.id,
-        from_chat_id: message.chat.id,
-        message_id: message.message_id
-      })
+      body: JSON.stringify({ chat_id: chatId, text })
     }
   )
   if (!res.ok) {
-    console.error('copyMessage failed:', res.status, await res.text())
+    console.error('sendMessage failed:', res.status, await res.text())
+  }
+}
+
+const reply = async (message: Message) => {
+  if (!message.text) {
+    await sendMessage(message.chat.id, 'I can only read text messages for now.')
+    return
+  }
+
+  try {
+    const { text } = await generateText({
+      model: neon('gpt-5-4-nano'),
+      instructions: 'You are a helpful, concise personal assistant chatting over Telegram.',
+      prompt: message.text
+    })
+    await sendMessage(message.chat.id, text)
+  } catch (err) {
+    console.error('generateText failed:', err)
+    await sendMessage(message.chat.id, 'Sorry, something went wrong. Please try again.')
   }
 }
 
@@ -48,7 +65,7 @@ telegram.post('/webhook', async (c) => {
   const update = await c.req.json<Update>()
 
   if (update.message) {
-    await copyMessage(update.message)
+    await reply(update.message)
   }
 
   // Always acknowledge, otherwise Telegram keeps retrying the update
