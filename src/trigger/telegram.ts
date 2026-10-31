@@ -1,6 +1,8 @@
 import { logger, webhook, webhooks } from "@trigger.dev/sdk";
 import { chat, defaultStorage } from "@trigger.dev/sdk/ai";
 import { neon } from "@neon/ai-sdk-provider";
+import { stepCountIs } from "ai";
+import { webTools, webToolsInstructions } from "./web-tools.js";
 
 type TelegramMessage = {
   message_id: number;
@@ -47,6 +49,22 @@ const sendMessage = async (chatId: number, text: string) => {
   return result.message_id;
 };
 
+// Telegram rejects messages over 4096 characters; break long replies on line boundaries
+const TELEGRAM_MAX_LENGTH = 4096;
+
+const splitMessage = (text: string) => {
+  const chunks: string[] = [];
+  let rest = text;
+  while (rest.length > TELEGRAM_MAX_LENGTH) {
+    const cut = rest.lastIndexOf("\n", TELEGRAM_MAX_LENGTH);
+    const end = cut > 0 ? cut : TELEGRAM_MAX_LENGTH;
+    chunks.push(rest.slice(0, end));
+    rest = rest.slice(end).replace(/^\n+/, "");
+  }
+  chunks.push(rest);
+  return chunks;
+};
+
 // One durable session per Telegram chat: text messages become turns, replies are posted back
 const telegramChannel = chat.channels.custom({
   id: "telegram",
@@ -62,7 +80,10 @@ const telegramChannel = chat.channels.custom({
   outbound: (reply) => (reply.text ? { text: reply.text } : null),
   send: async (message, ctx) => {
     const chatId = ctx.handle?.chatId ?? ctx.event!.message!.chat.id;
-    const messageId = await sendMessage(chatId, message.text);
+    let messageId = 0;
+    for (const chunk of splitMessage(message.text)) {
+      messageId = await sendMessage(chatId, chunk);
+    }
     return { ref: String(messageId) };
   },
   errorMessage: "Sorry, something went wrong. Please try again.",
@@ -74,12 +95,20 @@ export const telegramAgent = chat.agent({
   // The platform's transcript snapshot: a run that boots after the previous one ended
   // loads the conversation from it, so the agent remembers the chat without a database
   storage: defaultStorage,
-  system: "You are a helpful, concise personal assistant chatting over Telegram.",
-  run: async ({ messages, signal, streamText }) =>
+  tools: webTools,
+  run: async ({ messages, tools, signal, streamText }) =>
     streamText({
-      model: neon("gpt-5-4-nano"),
+      model: neon("claude-opus-5-5"),
+      // Set per turn so relative requests like "tonight" or "this weekend" resolve correctly
+      system: [
+        "You are a helpful, concise personal assistant chatting over Telegram.",
+        `Today is ${new Date().toUTCString()}.`,
+        webToolsInstructions,
+      ].join("\n\n"),
       messages,
+      tools,
       abortSignal: signal,
+      stopWhen: stepCountIs(15),
     }),
 });
 
