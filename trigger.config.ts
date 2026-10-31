@@ -4,6 +4,10 @@ export default defineConfig({
   project: "proj_bvuejzrpcllehagisuxc",
   dirs: ["./src/trigger"],
   maxDuration: 300,
+  build: {
+    // firecrawl-aisdk's WASM bash sandbox: optional native deps break bundling
+    external: ["just-bash"],
+  },
   retries: {
     enabledInDev: false,
     default: {
