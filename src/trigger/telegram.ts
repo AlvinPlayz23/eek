@@ -151,7 +151,9 @@ const toUserMessage = (message: TelegramMessage): UIMessage => {
 const telegramChannel = chat.channels.custom({
   id: "telegram",
   endpoint: telegramEndpoint,
-  key: "telegram-{event.clerkUserId}",
+  // Closed sessions can't be reopened and their keys can't be reused, so changing this prefix
+  // is how to start every user over with a fresh session
+  key: "telegram-chat-{event.clerkUserId}",
   filter:
     "event.clerkUserId != null && event.message.chat.type == 'private' && (event.message.text != null || event.message.caption != null || event.message.document != null || event.message.photo != null || event.message.audio != null || event.message.voice != null || event.message.video != null)",
   inbound: (update) => ({
