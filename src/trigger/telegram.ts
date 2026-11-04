@@ -21,7 +21,7 @@ type TelegramFile = {
 
 type TelegramMessage = {
   message_id: number;
-  chat: { id: number };
+  chat: { id: number; type: "private" | "group" | "supergroup" | "channel" };
   from?: { id: number };
   text?: string;
   caption?: string;
@@ -36,9 +36,12 @@ type TelegramMessage = {
 type TelegramUpdate = {
   update_id: number;
   message?: TelegramMessage;
+  // Added by the Hono webhook, which forwards only updates from Telegram users linked to Clerk
+  clerkUserId?: string;
 };
 
-// Telegram sends the secret_token passed to setWebhook in this header on every update
+// The Hono webhook forwards linked users' updates here with this endpoint's secret in the header
+// Telegram itself uses, so the endpoint also keeps accepting Telegram directly until it is switched
 export const telegramEndpoint = webhooks.endpoint.define({
   id: "telegram",
   source: webhooks.custom<TelegramUpdate>(
@@ -143,27 +146,29 @@ const toUserMessage = (message: TelegramMessage): UIMessage => {
   return { id: "", role: "user", parts };
 };
 
-// One durable session per Telegram chat: messages (text and files) become turns, replies are posted back
+// One durable session per Clerk user, in their private chat: messages (text and files) become turns,
+// replies are posted back
 const telegramChannel = chat.channels.custom({
   id: "telegram",
   endpoint: telegramEndpoint,
-  key: "telegram-{event.message.chat.id}",
+  key: "telegram-{event.clerkUserId}",
   filter:
-    "event.message.text != null || event.message.caption != null || event.message.document != null || event.message.photo != null || event.message.audio != null || event.message.voice != null || event.message.video != null",
+    "event.clerkUserId != null && event.message.chat.type == 'private' && (event.message.text != null || event.message.caption != null || event.message.document != null || event.message.photo != null || event.message.audio != null || event.message.voice != null || event.message.video != null)",
   inbound: (update) => ({
     message: toUserMessage(update.message!),
     externalUserId: update.message!.from && String(update.message!.from.id),
     externalMessageId: String(update.message!.message_id),
   }),
-  bind: (update) => ({ chatId: update.message!.chat.id }),
+  bind: (update) => ({ chatId: update.message!.chat.id, clerkUserId: update.clerkUserId! }),
   download: async (url) => {
     if (!url.href.startsWith(FILE_URL_PREFIX)) return null;
     return { data: await downloadFile(decodeURIComponent(url.href.slice(FILE_URL_PREFIX.length))) };
   },
   surface: (ctx) => {
     const chatId = ctx.handle?.chatId ?? ctx.event!.message!.chat.id;
+    const clerkUserId = ctx.handle?.clerkUserId ?? ctx.event!.clerkUserId!;
     return {
-      sandboxName: `telegram-${chatId}`,
+      sandboxName: `user-${clerkUserId}`,
       maxSendBytes: MAX_UPLOAD_BYTES,
       loadAttachment: downloadFile,
       sendFile: async (file, caption) => {
@@ -215,7 +220,7 @@ export const telegramUnsupportedMessage = webhook({
   id: "telegram-unsupported-message",
   endpoint: telegramEndpoint,
   filter:
-    "event.message != null && event.message.text == null && event.message.caption == null && event.message.document == null && event.message.photo == null && event.message.audio == null && event.message.voice == null && event.message.video == null",
+    "event.clerkUserId != null && event.message.chat.type == 'private' && event.message.text == null && event.message.caption == null && event.message.document == null && event.message.photo == null && event.message.audio == null && event.message.voice == null && event.message.video == null",
   onEvent: async ({ event }) => {
     logger.log("Unsupported Telegram message", { updateId: event.update_id });
     await sendMessage(
