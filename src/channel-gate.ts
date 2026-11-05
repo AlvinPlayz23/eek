@@ -1,8 +1,10 @@
 import { timingSafeEqual } from "node:crypto";
+import * as Sentry from "@sentry/node";
 import { idempotencyKeys, tasks } from "@trigger.dev/sdk";
 import { hasProPlan, upgradeUrl } from "./billing.js";
 import { findChannelLink, linkIdempotencyKey } from "./db/channel-links.js";
 import type { Platform } from "./db/schema.js";
+import { log } from "./log.js";
 import type { linkChannelAccount } from "./trigger/link-account.js";
 
 // What every channel webhook does once it has verified and parsed a platform's message: only
@@ -59,6 +61,8 @@ export const gateInbound = async ({
     return { status: "linking" };
   }
 
+  // Opaque Clerk id only: attributes this request's logs, errors and spans to the user
+  Sentry.setUser({ id: link.clerkUserId });
   return (await hasProPlan(link.clerkUserId))
     ? { status: "allowed", clerkUserId: link.clerkUserId }
     : { status: "upgrade" };
@@ -68,11 +72,13 @@ export const gateInbound = async ({
 // attached. Returns false on failure so the webhook answers non-2xx and the platform redelivers;
 // the Trigger endpoint dedupes redeliveries on the platform's own event id
 export const forwardToTrigger = async ({
+  platform,
   url,
   secretHeader,
   secret,
   body,
 }: {
+  platform: Platform;
   url: string;
   secretHeader: string;
   secret: string;
@@ -84,7 +90,12 @@ export const forwardToTrigger = async ({
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    console.error(`Forwarding to ${url} failed: ${res.status} ${await res.text()}`);
+    // The URL and response body aren't logged: the endpoint URL is credential-like, and the body can
+    // echo the request back. The status says whether it's auth (401/403), routing (404) or an outage
+    log.error("Forwarding to Trigger.dev failed", {
+      "channel.platform": platform,
+      "http.response.status_code": res.status,
+    });
   }
   return res.ok;
 };

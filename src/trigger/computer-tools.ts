@@ -8,6 +8,7 @@ import {
 import { chat, type ChannelRunSurface } from "@trigger.dev/sdk/ai";
 import { tool, type Tool } from "ai";
 import { z } from "zod";
+import { log } from "./log.js";
 
 // What a chat channel provides through its surface() for these tools to work
 export type ComputerSurface = {
@@ -20,6 +21,13 @@ export type ComputerSurface = {
     caption?: string
   ) => Promise<void>;
 };
+
+// A tool call the model got wrong (a directory instead of a file, a missing coordinate, a file too
+// big to send). The model sees the message and corrects itself, so it isn't reported to Sentry as
+// an error (see init.ts); failures of the sandbox or chat platforms still are
+export class ToolInputError extends Error {
+  override name = "ToolInputError";
+}
 
 const HOME = "/home/daytona";
 const MAX_OUTPUT_CHARS = 20_000;
@@ -55,7 +63,7 @@ const client = () => (daytona ??= new Daytona());
 const currentSurface = () => {
   const surface = chat.surface<ChannelRunSurface<ComputerSurface>>();
   if (!surface?.sandboxName) {
-    throw new Error("The computer is only available inside a chat.");
+    throw new ToolInputError("The computer is only available inside a chat.");
   }
   return surface;
 };
@@ -68,6 +76,9 @@ const readySandbox = async (name: string) => {
     sandbox = await client().get(name);
   } catch (error) {
     if (!(error instanceof DaytonaNotFoundError)) throw error;
+    // A new sandbox per user is the main Daytona cost driver; also marks a user's first use or a
+    // return after the week-long auto-delete
+    log.info("Sandbox created", { "sandbox.previous_state": "none" });
     return client().create({
       name,
       labels: { app: "personal-assistant" },
@@ -80,8 +91,15 @@ const readySandbox = async (name: string) => {
   if (STARTING_STATES.has(sandbox.state ?? "")) {
     await sandbox.waitUntilStarted(180);
   } else if (sandbox.state !== "started") {
-    // Restoring an archived sandbox takes longer than waking a stopped one
+    // Restoring an archived sandbox takes longer than waking a stopped one: the previous state
+    // explains a slow first tool call in a turn
+    const previousState = sandbox.state;
+    const startedAt = Date.now();
     await sandbox.start(180);
+    log.info("Sandbox started", {
+      "sandbox.previous_state": previousState,
+      "sandbox.start_ms": Date.now() - startedAt,
+    });
   }
   return sandbox;
 };
@@ -170,6 +188,8 @@ const runCommand = tool({
       return { exitCode, output: truncate(result) };
     } catch (error) {
       if (!(error instanceof DaytonaProcessExecutionTimeoutError)) throw error;
+      // The command itself isn't logged: it can carry the user's data
+      log.warn("Sandbox command timed out", { "sandbox.timeout_s": timeoutSeconds });
       return { exitCode: null, output: `Timed out after ${timeoutSeconds} seconds.` };
     }
   },
@@ -207,10 +227,10 @@ const sendFile = tool({
     const fullPath = resolvePath(path);
     const { size, isDir } = await sandbox.fs.getFileDetails(fullPath);
     if (isDir) {
-      throw new Error(`${fullPath} is a directory. Zip it first.`);
+      throw new ToolInputError(`${fullPath} is a directory. Zip it first.`);
     }
     if (size > surface.maxSendBytes) {
-      throw new Error(`${fullPath} is ${size} bytes; the chat accepts at most ${surface.maxSendBytes}.`);
+      throw new ToolInputError(`${fullPath} is ${size} bytes; the chat accepts at most ${surface.maxSendBytes}.`);
     }
     const data = await sandbox.fs.downloadFile(fullPath);
     const filename = posix.basename(fullPath);
@@ -230,11 +250,11 @@ const viewFile = tool({
     const fullPath = resolvePath(path);
     const mediaType = mediaTypeOf(fullPath);
     if (!VIEWABLE.has(mediaType)) {
-      throw new Error("Only PNG, JPEG, GIF, WebP and PDF files can be viewed. Convert it first.");
+      throw new ToolInputError("Only PNG, JPEG, GIF, WebP and PDF files can be viewed. Convert it first.");
     }
     const { size } = await sandbox.fs.getFileDetails(fullPath);
     if (size > MAX_VIEW_BYTES) {
-      throw new Error(`${fullPath} is ${size} bytes; shrink it below ${MAX_VIEW_BYTES} first.`);
+      throw new ToolInputError(`${fullPath} is ${size} bytes; shrink it below ${MAX_VIEW_BYTES} first.`);
     }
     const data = await sandbox.fs.downloadFile(fullPath);
     keepInline(toolCallId, { mediaType, data: data.toString("base64") });
@@ -280,7 +300,7 @@ const computer = tool({
 
     const at = () => {
       if (input.x === undefined || input.y === undefined) {
-        throw new Error(`${input.action} needs x and y.`);
+        throw new ToolInputError(`${input.action} needs x and y.`);
       }
       return [input.x, input.y] as const;
     };
@@ -302,7 +322,7 @@ const computer = tool({
         break;
       case "drag":
         if (input.toX === undefined || input.toY === undefined) {
-          throw new Error("drag needs toX and toY.");
+          throw new ToolInputError("drag needs toX and toY.");
         }
         await desktop.mouse.drag(...at(), input.toX, input.toY);
         break;
@@ -310,11 +330,11 @@ const computer = tool({
         await desktop.mouse.scroll(...at(), input.direction ?? "down", input.amount ?? 3);
         break;
       case "type":
-        if (!input.text) throw new Error("type needs text.");
+        if (!input.text) throw new ToolInputError("type needs text.");
         await desktop.keyboard.type(input.text);
         break;
       case "key":
-        if (!input.keys) throw new Error("key needs keys.");
+        if (!input.keys) throw new ToolInputError("key needs keys.");
         await (input.keys.includes("+")
           ? desktop.keyboard.hotkey(input.keys)
           : desktop.keyboard.press(input.keys));

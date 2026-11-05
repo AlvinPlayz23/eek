@@ -1,9 +1,11 @@
-import { AbortTaskRunError, idempotencyKeys, logger, schemaTask, wait } from "@trigger.dev/sdk";
+import * as Sentry from "@sentry/node";
+import { AbortTaskRunError, idempotencyKeys, schemaTask, wait } from "@trigger.dev/sdk";
 import { z } from "zod";
 import { findChannelLink, linkIdempotencyKey } from "../db/channel-links.js";
 import { db } from "../db/index.js";
 import { channelIdentifiers, PLATFORMS } from "../db/schema.js";
 import { sendChannelText } from "./channel-messengers.js";
+import { log } from "./log.js";
 
 type DeviceAuthorization = {
   device_code: string;
@@ -85,6 +87,7 @@ export const linkChannelAccount = schemaTask({
       }
 
       const device = await startDeviceAuthorization();
+      log.info("Account linking started", { "channel.platform": platform });
       await sendMessage(
         [
           "Connect your account to start chatting.",
@@ -112,10 +115,13 @@ export const linkChannelAccount = schemaTask({
             .values({ platform, externalUserId, clerkUserId: user.sub })
             .onConflictDoNothing();
           const link = await findChannelLink(platform, externalUserId);
-          logger.log("Linked channel user", {
-            platform,
-            externalUserId,
-            clerkUserId: link?.clerkUserId,
+          // The platform handle isn't logged (a Linq handle is a phone number or email): the
+          // Clerk id identifies the user, and the run's tags carry the handle for support lookups
+          if (link) Sentry.setUser({ id: link.clerkUserId });
+          log.info("Account linked", {
+            "channel.platform": platform,
+            // False when a concurrent flow linked this handle to another Clerk user first
+            "account.link_new": link?.clerkUserId === user.sub,
           });
           await sendMessage(
             `You're connected${user.email ? ` as ${user.email}` : ""}. Send me a message to get started.`
@@ -130,6 +136,7 @@ export const linkChannelAccount = schemaTask({
             interval += 5;
             continue;
           case "access_denied":
+            log.info("Account linking denied", { "channel.platform": platform });
             await sendMessage("Sign-in was cancelled. Send me any message to try again.");
             return { status: "denied" as const };
           case "expired_token":
@@ -142,6 +149,8 @@ export const linkChannelAccount = schemaTask({
         break;
       }
 
+      // Many expiries mean users get the link but don't finish signing in
+      log.info("Account linking expired", { "channel.platform": platform });
       await sendMessage("The sign-in code expired. Send me any message to get a new one.");
       return { status: "expired" as const };
     } finally {

@@ -1,5 +1,7 @@
+import * as Sentry from "@sentry/node";
 import { Hono } from "hono";
 import { forwardToTrigger, gateInbound, secretMatches, upgradeMessage } from "./channel-gate.js";
+import { log } from "./log.js";
 
 type TelegramUpdate = {
   update_id: number;
@@ -15,6 +17,8 @@ const SECRET_HEADER = "x-telegram-bot-api-secret-token";
 // are forwarded to the Trigger.dev endpoint
 export const telegramWebhook = new Hono().post("/", async (c) => {
   if (!secretMatches(c.req.header(SECRET_HEADER), process.env.TELEGRAM_WEBHOOK_SECRET)) {
+    // Either a misconfigured secret (every message stops reaching the agent) or someone probing
+    log.warn("Webhook rejected: secret mismatch", { "channel.platform": "telegram" });
     return c.text("Unauthorized", 401);
   }
 
@@ -34,9 +38,19 @@ export const telegramWebhook = new Hono().post("/", async (c) => {
     });
   } catch (error) {
     // Telegram redelivers on a non-2xx, so a Clerk outage retries instead of dropping the message
-    console.error(`Gate for Telegram update ${update.update_id} failed:`, error);
+    Sentry.captureException(error);
+    log.error("Channel gate failed", {
+      "channel.platform": "telegram",
+      "channel.event_id": update.update_id,
+    });
     return c.text("Upstream error", 502);
   }
+
+  log.info("Channel message gated", {
+    "channel.platform": "telegram",
+    "channel.event_id": update.update_id,
+    "channel.gate_status": gate.status,
+  });
 
   switch (gate.status) {
     case "linking":
@@ -46,6 +60,7 @@ export const telegramWebhook = new Hono().post("/", async (c) => {
       return c.json({ method: "sendMessage", chat_id: message.chat.id, text: upgradeMessage() });
     case "allowed": {
       const forwarded = await forwardToTrigger({
+        platform: "telegram",
         url: process.env.TRIGGER_TELEGRAM_WEBHOOK_URL!,
         secretHeader: SECRET_HEADER,
         secret: process.env.TRIGGER_TELEGRAM_WEBHOOK_SECRET!,
