@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { idempotencyKeys, tasks } from "@trigger.dev/sdk";
 import { Hono } from "hono";
+import { hasProPlan, upgradeUrl } from "./billing.js";
 import { findTelegramLink, linkIdempotencyKey } from "./db/channel-links.js";
 import type { linkTelegramAccount } from "./trigger/link-account.js";
 
@@ -22,8 +23,8 @@ const secretMatches = (received: string | undefined, expected: string | undefine
 };
 
 // Telegram's webhook lands here first. Only messages from Telegram users linked to a Clerk account
-// reach the agent, forwarded to the Trigger.dev endpoint with their Clerk user id attached;
-// everyone else is sent a sign-in link instead
+// on the Pro plan reach the agent, forwarded to the Trigger.dev endpoint with their Clerk user id
+// attached; unlinked users are sent a sign-in link, linked users without Pro an upgrade link
 export const telegramWebhook = new Hono().post("/", async (c) => {
   if (!secretMatches(c.req.header(SECRET_HEADER), process.env.TELEGRAM_WEBHOOK_SECRET)) {
     return c.text("Unauthorized", 401);
@@ -53,6 +54,28 @@ export const telegramWebhook = new Hono().post("/", async (c) => {
       }
     );
     return c.body(null, 200);
+  }
+
+  let isPro: boolean;
+  try {
+    isPro = await hasProPlan(link.clerkUserId);
+  } catch (error) {
+    // Telegram redelivers on a non-2xx, so a Clerk outage retries instead of dropping the message
+    console.error(`Plan check for update ${update.update_id} failed:`, error);
+    return c.text("Upstream error", 502);
+  }
+
+  if (!isPro) {
+    // Replying in the webhook response makes Telegram send the message, with no extra API call
+    return c.json({
+      method: "sendMessage",
+      chat_id: message.chat.id,
+      text: [
+        "The assistant is available on the Pro plan.",
+        "",
+        `Upgrade here, then send me a message again: ${upgradeUrl()}`,
+      ].join("\n"),
+    });
   }
 
   const res = await fetch(process.env.TRIGGER_TELEGRAM_WEBHOOK_URL!, {
