@@ -26,6 +26,7 @@
   },
   "devDependencies": {
     "@hono/cli": "^1.0.0-rc.8",
+    "@sentry/esbuild-plugin": "^11.11.0",
     "@trigger.dev/build": "4.8.3",
     "@types/node": "^26.1.1",
     "@types/pg": "^8.23.1",
