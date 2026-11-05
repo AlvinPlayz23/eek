@@ -55,8 +55,10 @@ tasks.onStartAttempt(({ ctx }) => {
 
 // Fires once a run has failed for good (after retries), not on every failed attempt.
 // Payloads hold user messages, so they are not attached.
-tasks.onFailure(({ error }) => {
+tasks.onFailure(async ({ error }) => {
   Sentry.captureException(error)
+  // Flushed here too: the hook order relative to onComplete isn't guaranteed
+  await Sentry.flush(2000)
 })
 
 // Logs and spans are buffered. A run can be torn down when it ends, and checkpointed while it waits
