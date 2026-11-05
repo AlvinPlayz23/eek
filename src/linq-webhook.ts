@@ -1,6 +1,8 @@
 import type { MessageReceivedWebhookEvent } from "@linqapp/sdk/resources/webhooks";
+import * as Sentry from "@sentry/node";
 import { Hono } from "hono";
 import { forwardToTrigger, gateInbound, upgradeMessage } from "./channel-gate.js";
+import { log } from "./log.js";
 import {
   isOptedOutError,
   isOptOutKeyword,
@@ -19,6 +21,8 @@ export const linqWebhook = new Hono().post("/", async (c) => {
   try {
     event = unwrapWebhook(await c.req.text(), c.req.header());
   } catch {
+    // Either a rotated signing secret (every message stops reaching the agent) or someone probing
+    log.warn("Webhook rejected: invalid signature", { "channel.platform": "linq" });
     return c.text("Invalid signature", 401);
   }
 
@@ -35,6 +39,10 @@ export const linqWebhook = new Hono().post("/", async (c) => {
   // STOP and the other opt-out keywords are handled by Linq, which blocks every send to the user
   // until they write again; answering them would only bounce off that block
   if (data.parts.every((part) => part.type === "text") && isOptOutKeyword(messageText(data.parts))) {
+    log.info("Opt-out keyword received", {
+      "channel.platform": "linq",
+      "channel.event_id": event.event_id,
+    });
     return c.body(null, 200);
   }
 
@@ -48,9 +56,19 @@ export const linqWebhook = new Hono().post("/", async (c) => {
     });
   } catch (error) {
     // A non-2xx makes Linq redeliver, so a Clerk outage retries instead of dropping the message
-    console.error(`Gate for Linq event ${event.event_id} failed:`, error);
+    Sentry.captureException(error);
+    log.error("Channel gate failed", {
+      "channel.platform": "linq",
+      "channel.event_id": event.event_id,
+    });
     return c.text("Upstream error", 502);
   }
+
+  log.info("Channel message gated", {
+    "channel.platform": "linq",
+    "channel.event_id": event.event_id,
+    "channel.gate_status": gate.status,
+  });
 
   switch (gate.status) {
     case "linking":
@@ -60,12 +78,17 @@ export const linqWebhook = new Hono().post("/", async (c) => {
         await sendMessage(chatId, upgradeMessage());
       } catch (error) {
         if (isOptedOutError(error)) return c.body(null, 200);
-        console.error(`Upgrade reply for Linq event ${event.event_id} failed:`, error);
+        Sentry.captureException(error);
+        log.error("Upgrade reply failed", {
+          "channel.platform": "linq",
+          "channel.event_id": event.event_id,
+        });
         return c.text("Upstream error", 502);
       }
       return c.body(null, 200);
     case "allowed": {
       const forwarded = await forwardToTrigger({
+        platform: "linq",
         url: process.env.TRIGGER_LINQ_WEBHOOK_URL!,
         secretHeader: FORWARD_SECRET_HEADER,
         secret: process.env.TRIGGER_LINQ_WEBHOOK_SECRET!,

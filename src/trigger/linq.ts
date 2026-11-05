@@ -1,8 +1,9 @@
-import { logger, webhook, webhooks } from "@trigger.dev/sdk";
+import { webhook, webhooks } from "@trigger.dev/sdk";
 import { chat } from "@trigger.dev/sdk/ai";
 import type { MessageReceivedWebhookEvent } from "@linqapp/sdk/resources/webhooks";
 import { channelAgent, channelSurface } from "./channel-agent.js";
 import { channelFileUrls, splitMessage, toUserMessage } from "./channel-messages.js";
+import { log } from "./log.js";
 import {
   downloadAttachment,
   isOptedOutError,
@@ -117,7 +118,7 @@ const linqChannel = chat.channels.custom({
       // The user texted STOP mid-turn: Linq blocks every send until they write again. Retrying,
       // or sending from another line, would break that, so the reply is dropped
       if (!isOptedOutError(error)) throw error;
-      logger.warn("Reply dropped: the recipient opted out", { chatId });
+      log.warn("Reply dropped: recipient opted out", { "channel.platform": "linq" });
     }
     return { ref: messageId };
   },
@@ -138,7 +139,10 @@ export const linqUnsupportedMessage = webhook({
   filter:
     "event.clerkUserId != null && event.event_type == 'message.received' && event.data.direction == 'inbound' && event.data.chat.is_group != true && (event.data.parts all (type == 'imessage_app') || event.data.parts all (type == 'app_clip'))",
   onEvent: async ({ event }) => {
-    logger.log("Unsupported iMessage", { eventId: event.event_id });
+    log.info("Unsupported message type", {
+      "channel.platform": "linq",
+      "channel.event_id": event.event_id,
+    });
     try {
       await sendMessage(
         event.data.chat.id,

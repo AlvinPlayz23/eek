@@ -1,6 +1,7 @@
-import { logger, webhook, webhooks } from "@trigger.dev/sdk";
+import { webhook, webhooks } from "@trigger.dev/sdk";
 import { chat } from "@trigger.dev/sdk/ai";
 import { channelAgent, channelSurface } from "./channel-agent.js";
+import { log } from "./log.js";
 import {
   channelFileUrls,
   splitMessage,
@@ -152,7 +153,10 @@ export const telegramUnsupportedMessage = webhook({
   filter:
     "event.clerkUserId != null && event.message.chat.type == 'private' && event.message.text == null && event.message.caption == null && event.message.document == null && event.message.photo == null && event.message.audio == null && event.message.voice == null && event.message.video == null",
   onEvent: async ({ event }) => {
-    logger.log("Unsupported Telegram message", { updateId: event.update_id });
+    log.info("Unsupported message type", {
+      "channel.platform": "telegram",
+      "channel.event_id": event.update_id,
+    });
     await sendMessage(
       event.message!.chat.id,
       "I can read text, photos, documents, audio and video, but not this kind of message."
