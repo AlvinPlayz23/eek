@@ -13,6 +13,17 @@ Sentry.init({
     // Sentry. Both flags must be explicit, since the integration records content by default
     Sentry.vercelAIIntegration({ recordInputs: false, recordOutputs: false }),
   ],
+  // The SDK collects all of these by default. Task code handles users' messages, files and API
+  // keys, so each is opted out explicitly (genAI matches the integration's flags above)
+  dataCollection: {
+    userInfo: false,
+    cookies: false,
+    httpHeaders: false,
+    httpBodies: [],
+    urlQueryParams: false,
+    genAI: { inputs: false, outputs: false },
+    stackFrameVariables: false,
+  },
   // Each agent turn is its own trace and the only traced work here, so keep all of them:
   // a dropped root would drop the whole turn's cost and token data
   tracesSampleRate: 1.0,
