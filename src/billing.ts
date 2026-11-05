@@ -5,7 +5,7 @@ type SubscriptionItem = { status: string; plan: { slug: string } };
 type Subscription = { subscription_items: SubscriptionItem[] };
 
 // Webhook requests carry no Clerk session, so `has({ plan })` isn't available; the plan is read
-// from the Backend API by the Clerk user id the Telegram account is linked to instead
+// from the Backend API by the Clerk user id the chat account is linked to instead
 export const hasProPlan = async (clerkUserId: string) => {
   const res = await fetch(
     `https://api.clerk.com/v1/users/${encodeURIComponent(clerkUserId)}/billing/subscription`,

@@ -1,9 +1,5 @@
-import { timingSafeEqual } from "node:crypto";
-import { idempotencyKeys, tasks } from "@trigger.dev/sdk";
 import { Hono } from "hono";
-import { hasProPlan, upgradeUrl } from "./billing.js";
-import { findTelegramLink, linkIdempotencyKey } from "./db/channel-links.js";
-import type { linkTelegramAccount } from "./trigger/link-account.js";
+import { forwardToTrigger, gateInbound, secretMatches, upgradeMessage } from "./channel-gate.js";
 
 type TelegramUpdate = {
   update_id: number;
@@ -15,16 +11,8 @@ type TelegramUpdate = {
 
 const SECRET_HEADER = "x-telegram-bot-api-secret-token";
 
-const secretMatches = (received: string | undefined, expected: string | undefined) => {
-  if (!received || !expected) return false;
-  const a = Buffer.from(received);
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
-};
-
-// Telegram's webhook lands here first. Only messages from Telegram users linked to a Clerk account
-// on the Pro plan reach the agent, forwarded to the Trigger.dev endpoint with their Clerk user id
-// attached; unlinked users are sent a sign-in link, linked users without Pro an upgrade link
+// Telegram's webhook lands here first, and only private-chat messages that pass the channel gate
+// are forwarded to the Trigger.dev endpoint
 export const telegramWebhook = new Hono().post("/", async (c) => {
   if (!secretMatches(c.req.header(SECRET_HEADER), process.env.TELEGRAM_WEBHOOK_SECRET)) {
     return c.text("Unauthorized", 401);
@@ -37,59 +25,33 @@ export const telegramWebhook = new Hono().post("/", async (c) => {
     return c.body(null, 200);
   }
 
-  const telegramUserId = String(message.from.id);
-  const link = await findTelegramLink(telegramUserId);
-
-  if (!link) {
-    await tasks.trigger<typeof linkTelegramAccount>(
-      "link-telegram-account",
-      { telegramUserId, chatId: message.chat.id },
-      {
-        idempotencyKey: await idempotencyKeys.create(linkIdempotencyKey(telegramUserId), {
-          scope: "global",
-        }),
-        // Matches the device code's lifetime; the run also clears the key as soon as it ends
-        idempotencyKeyTTL: "10m",
-        tags: [`telegram-user:${telegramUserId}`],
-      }
-    );
-    return c.body(null, 200);
-  }
-
-  let isPro: boolean;
+  let gate;
   try {
-    isPro = await hasProPlan(link.clerkUserId);
+    gate = await gateInbound({
+      platform: "telegram",
+      externalUserId: String(message.from.id),
+      chatId: String(message.chat.id),
+    });
   } catch (error) {
     // Telegram redelivers on a non-2xx, so a Clerk outage retries instead of dropping the message
-    console.error(`Plan check for update ${update.update_id} failed:`, error);
+    console.error(`Gate for Telegram update ${update.update_id} failed:`, error);
     return c.text("Upstream error", 502);
   }
 
-  if (!isPro) {
-    // Replying in the webhook response makes Telegram send the message, with no extra API call
-    return c.json({
-      method: "sendMessage",
-      chat_id: message.chat.id,
-      text: [
-        "The assistant is available on the Pro plan.",
-        "",
-        `Upgrade here, then send me a message again: ${upgradeUrl()}`,
-      ].join("\n"),
-    });
+  switch (gate.status) {
+    case "linking":
+      return c.body(null, 200);
+    case "upgrade":
+      // Replying in the webhook response makes Telegram send the message, with no extra API call
+      return c.json({ method: "sendMessage", chat_id: message.chat.id, text: upgradeMessage() });
+    case "allowed": {
+      const forwarded = await forwardToTrigger({
+        url: process.env.TRIGGER_TELEGRAM_WEBHOOK_URL!,
+        secretHeader: SECRET_HEADER,
+        secret: process.env.TRIGGER_TELEGRAM_WEBHOOK_SECRET!,
+        body: { ...update, clerkUserId: gate.clerkUserId },
+      });
+      return forwarded ? c.body(null, 200) : c.text("Upstream error", 502);
+    }
   }
-
-  const res = await fetch(process.env.TRIGGER_TELEGRAM_WEBHOOK_URL!, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      [SECRET_HEADER]: process.env.TRIGGER_TELEGRAM_WEBHOOK_SECRET!,
-    },
-    body: JSON.stringify({ ...update, clerkUserId: link.clerkUserId }),
-  });
-  if (!res.ok) {
-    // A non-2xx makes Telegram redeliver; the Trigger endpoint dedupes on update_id
-    console.error(`Forwarding update ${update.update_id} failed: ${res.status} ${await res.text()}`);
-    return c.text("Upstream error", 502);
-  }
-  return c.body(null, 200);
 });

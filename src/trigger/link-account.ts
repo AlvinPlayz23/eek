@@ -1,9 +1,9 @@
 import { AbortTaskRunError, idempotencyKeys, logger, schemaTask, wait } from "@trigger.dev/sdk";
 import { z } from "zod";
-import { findTelegramLink, linkIdempotencyKey } from "../db/channel-links.js";
+import { findChannelLink, linkIdempotencyKey } from "../db/channel-links.js";
 import { db } from "../db/index.js";
-import { channelIdentifiers } from "../db/schema.js";
-import { sendMessage } from "./telegram-api.js";
+import { channelIdentifiers, PLATFORMS } from "../db/schema.js";
+import { sendChannelText } from "./channel-messengers.js";
 
 type DeviceAuthorization = {
   device_code: string;
@@ -61,28 +61,31 @@ const fetchUserInfo = async (accessToken: string) => {
   return (await res.json()) as { sub: string; email?: string };
 };
 
-// Links a Telegram user to their Clerk account: sends them a sign-in link and code, waits for them
-// to approve it in the browser, then records which Clerk user they are
-export const linkTelegramAccount = schemaTask({
-  id: "link-telegram-account",
+export const LINK_ACCOUNT_TASK_ID = "link-channel-account";
+
+// Links a chat platform user to their Clerk account: sends them a sign-in link and code, waits for
+// them to approve it in the browser, then records which Clerk user they are
+export const linkChannelAccount = schemaTask({
+  id: LINK_ACCOUNT_TASK_ID,
   schema: z.object({
-    telegramUserId: z.string(),
-    chatId: z.number(),
+    platform: z.enum(PLATFORMS),
+    externalUserId: z.string(),
+    chatId: z.string(),
   }),
   // A retry would send a second code; let the user start over by messaging again instead
   retry: { maxAttempts: 1 },
   machine: "micro",
   // Device codes live 10 minutes
   maxDuration: 15 * 60,
-  run: async ({ telegramUserId, chatId }) => {
+  run: async ({ platform, externalUserId, chatId }) => {
+    const sendMessage = (text: string) => sendChannelText[platform](chatId, text);
     try {
-      if (await findTelegramLink(telegramUserId)) {
+      if (await findChannelLink(platform, externalUserId)) {
         return { status: "already-linked" as const };
       }
 
       const device = await startDeviceAuthorization();
       await sendMessage(
-        chatId,
         [
           "Connect your account to start chatting.",
           "",
@@ -106,12 +109,15 @@ export const linkTelegramAccount = schemaTask({
           // The unique index keeps an existing link if two flows for the same user both finish
           await db
             .insert(channelIdentifiers)
-            .values({ platform: "telegram", externalUserId: telegramUserId, clerkUserId: user.sub })
+            .values({ platform, externalUserId, clerkUserId: user.sub })
             .onConflictDoNothing();
-          const link = await findTelegramLink(telegramUserId);
-          logger.log("Linked Telegram user", { telegramUserId, clerkUserId: link?.clerkUserId });
+          const link = await findChannelLink(platform, externalUserId);
+          logger.log("Linked channel user", {
+            platform,
+            externalUserId,
+            clerkUserId: link?.clerkUserId,
+          });
           await sendMessage(
-            chatId,
             `You're connected${user.email ? ` as ${user.email}` : ""}. Send me a message to get started.`
           );
           return { status: "linked" as const, clerkUserId: link?.clerkUserId };
@@ -124,7 +130,7 @@ export const linkTelegramAccount = schemaTask({
             interval += 5;
             continue;
           case "access_denied":
-            await sendMessage(chatId, "Sign-in was cancelled. Send me any message to try again.");
+            await sendMessage("Sign-in was cancelled. Send me any message to try again.");
             return { status: "denied" as const };
           case "expired_token":
             break;
@@ -136,11 +142,11 @@ export const linkTelegramAccount = schemaTask({
         break;
       }
 
-      await sendMessage(chatId, "The sign-in code expired. Send me any message to get a new one.");
+      await sendMessage("The sign-in code expired. Send me any message to get a new one.");
       return { status: "expired" as const };
     } finally {
       // The flow is over either way, so the user's next message may start a new one right away
-      await idempotencyKeys.reset("link-telegram-account", linkIdempotencyKey(telegramUserId), {
+      await idempotencyKeys.reset(LINK_ACCOUNT_TASK_ID, linkIdempotencyKey(platform, externalUserId), {
         scope: "global",
       });
     }
