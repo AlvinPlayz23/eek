@@ -20,16 +20,13 @@ account, and Pro subscribers talk to an agent with web access and its own Linux 
 
 ```
 npm install
-# create .env with the variables below
+cp .env.example .env   # then fill it in
 npm run dev            # the app on http://localhost:3000
 npm run inngest:dev    # the Inngest dev server on http://localhost:8288
 npm test               # needs DATABASE_URL pointing at a database with the schema pushed
 ```
 
-Environment variables: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `INNGEST_DEV=1` (locally),
-`INNGEST_EVENT_KEY` and `INNGEST_SIGNING_KEY` (production), `TELEGRAM_BOT_TOKEN`,
-`TELEGRAM_WEBHOOK_SECRET`, `LINQ_API_V3_API_KEY`, `LINQ_WEBHOOK_SECRET`, `CLERK_*`,
-`DAYTONA_API_KEY`, `FIRECRAWL_API_KEY`, `SENTRY_DSN`, and the Neon AI Gateway settings.
+See `.env.example` for every environment variable.
 
 ## Deploying to Vercel
 
