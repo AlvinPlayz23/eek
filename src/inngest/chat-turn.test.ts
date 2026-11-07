@@ -42,7 +42,7 @@ const channel = {
   setWorking: async () => {},
 };
 mock.module("./channels.js", { exports: { CHANNELS: { telegram: channel, linq: channel }, sendChannelText: async () => {} } });
-mock.module("./model.js", { exports: { chatModel: () => ({}) } });
+mock.module("./model.js", { exports: { chatModel: () => ({}), modelId: () => "test-model" } });
 mock.module("ai", {
   exports: {
     ...ai,

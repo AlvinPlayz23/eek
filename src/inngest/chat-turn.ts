@@ -45,10 +45,9 @@ import {
 } from "./computer-tools.js";
 import { chatMessageReceived } from "./events.js";
 import { reportFailure } from "./failure.js";
-import { chatModel } from "./model.js";
+import { chatModel, modelId } from "./model.js";
 import { webToolsInstructions } from "./web-tools.js";
 
-const MODEL_ID = "claude-opus-5-5";
 // Model calls per user turn, as before. Each is one durable step
 const MAX_MODEL_CALLS = 40;
 // Turns one run answers back to back before handing over to a fresh run
@@ -207,7 +206,7 @@ const runAgentTurn = async ({
       // Refreshes the typing bubble, which clears itself after about a minute and a half
       await channel.setWorking(chatId, true);
       const result = await generateText({
-        model: chatModel(MODEL_ID),
+        model: chatModel(),
         system: systemPrompt(channel.platformName),
         messages: await resolveFiles(dropOldImages(messages, MAX_INLINE_IMAGES), platform, channel),
         tools: modelTools,
@@ -390,7 +389,7 @@ export const chatTurn = inngest.createFunction(
         // aren't kept
         log.info("Agent turn finished", {
           "gen_ai.agent.name": `${platform}-agent`,
-          "gen_ai.request.model": MODEL_ID,
+          "gen_ai.request.model": modelId(),
           "channel.platform": CHANNELS[platform].platformName,
           "gen_ai.usage.input_tokens": result.usage.input,
           "gen_ai.usage.input_tokens.cached": result.usage.cached,
