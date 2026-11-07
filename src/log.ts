@@ -1,7 +1,7 @@
 import * as Sentry from '@sentry/node'
 
-// Structured logs for the Hono server: sent to Sentry Logs (searchable by attribute, linked to the
-// request's trace) and echoed to stdout for Railway's log view.
+// Structured logs for the server and the Inngest functions: sent to Sentry Logs (searchable by
+// attribute, linked to the request's trace) and echoed to stdout for the host's log view.
 // Attributes are queried in Sentry, so keep them to ids, statuses and counts: never message text,
 // secrets, or platform handles (a Linq handle is a phone number or email)
 export type LogAttributes = Record<string, string | number | boolean | undefined>

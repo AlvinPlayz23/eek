@@ -1,6 +1,9 @@
 import * as Sentry from '@sentry/node'
 import { Hono } from 'hono'
+import { serve } from 'inngest/hono'
+import { functions, inngest } from './inngest/index.js'
 import { linqWebhook } from './linq-webhook.js'
+import { requirePlatform } from './platforms.js'
 import { telegramWebhook } from './telegram-webhook.js'
 
 const app = new Hono()
@@ -9,11 +12,22 @@ const app = new Hono()
 // Hono integration does the same when instrument.ts is preloaded; requests are deduplicated.
 app.use(Sentry.honoMiddleware(app))
 
+// A serverless function can be frozen once it has answered, so what Sentry buffered is sent first
+app.use(async (_c, next) => {
+  await next()
+  await Sentry.flush(2000)
+})
+
 app.get('/', (c) => {
-  return c.text('Hello Railway!')
+  return c.text('Hello Vercel!')
 })
 
 app.route('/telegram/webhook', telegramWebhook)
+// Linq (iMessage) is switched off unless LINQ_ENABLED=true; see docs/linq.md
+app.use('/linq/webhook', requirePlatform('linq'))
 app.route('/linq/webhook', linqWebhook)
+
+// Inngest calls the agent's functions here: signed requests that run one or more steps of a run
+app.on(['GET', 'POST', 'PUT'], '/api/inngest', serve({ client: inngest, functions }))
 
 export default app

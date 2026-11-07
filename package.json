@@ -2,9 +2,11 @@
   "name": "personal-assistant",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch --env-file=.env --import ./src/instrument.ts src/index.ts",
+    "dev": "tsx watch --env-file=.env --import ./src/instrument.ts src/local.ts",
+    "inngest:dev": "inngest-cli dev -u http://localhost:3000/api/inngest --no-discovery",
     "build": "tsc",
-    "start": "node --import ./dist/src/instrument.js dist/src/index.js",
+    "start": "node --import ./dist/src/instrument.js dist/src/local.js",
+    "test": "tsx --test --experimental-test-module-mocks \"src/**/*.test.ts\"",
     "db:studio": "node --env-file=.env ./node_modules/.bin/drizzle-kit studio",
     "db:push": "node --env-file=.env ./node_modules/.bin/drizzle-kit push"
   },
@@ -16,21 +18,21 @@
     "@neon/config": "^1.9.5",
     "@neon/env": "^1.6.6",
     "@sentry/node": "^11.11.0",
-    "@trigger.dev/sdk": "4.8.3",
     "ai": "^7.0.157",
     "drizzle-orm": "^0.45.4",
     "firecrawl-aisdk": "^0.13.1",
     "hono": "^4.13.14",
+    "inngest": "^4.26.2",
     "pg": "^8.23.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@hono/cli": "^1.0.0-rc.8",
-    "@sentry/esbuild-plugin": "^11.11.0",
-    "@trigger.dev/build": "4.8.3",
+    "@inngest/test": "^1.0.0",
     "@types/node": "^26.1.1",
     "@types/pg": "^8.23.1",
     "drizzle-kit": "^0.31.11",
+    "inngest-cli": "^1.51.0",
     "tsx": "^4.23.0",
     "typescript": "^7.0.2"
   }

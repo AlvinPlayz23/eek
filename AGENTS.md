@@ -6,9 +6,13 @@ Run `npx hono --help` first, and use the CLI instead of a dev server.
 
 Do not use Drizzle migrations (`drizzle-kit generate` / `drizzle-kit migrate`). Edit `src/db/schema.ts` and apply it with `npm run db:push`.
 
-## Railway environment variables
+## Vercel environment variables
 
-When syncing environment variables to Railway (e.g. "sync environment variables" via the Railway skill/MCP), always exclude `TRIGGER_SECRET_KEY`. The local value is a dev key and must never overwrite Railway's production `TRIGGER_SECRET_KEY`. Do not set, update, or delete it on Railway unless explicitly asked to change that specific variable.
+The app is deployed on Vercel and its Inngest functions are synced by Inngest's Vercel integration, which sets `INNGEST_EVENT_KEY` and `INNGEST_SIGNING_KEY` on the project. When syncing environment variables to Vercel (e.g. "sync environment variables" via the Vercel CLI/MCP), always exclude `INNGEST_DEV`, `INNGEST_EVENT_KEY` and `INNGEST_SIGNING_KEY`. The local values are for the dev server and must never overwrite the integration's production keys. Do not set, update, or delete them on Vercel unless explicitly asked to change that specific variable.
+
+## Inngest
+
+Background work runs as Inngest functions in `src/inngest/` (served at `/api/inngest`). Read the Inngest docs for the installed `inngest` v4 before changing them; the TypeScript SDK reference is at https://www.inngest.com/docs/reference/typescript/v4. Function code is replayed on every step, so keep anything non-deterministic (clock, randomness, network) inside `step.run`. Run the local dev server with `npm run inngest:dev` next to `npm run dev`, with `INNGEST_DEV=1` in `.env`.
 
 ## Greptile review for security-critical changes
 
@@ -16,13 +20,13 @@ Whenever a change touches a security-critical layer, run a Greptile review of th
 
 Security-critical layers in this app:
 
-- **Webhook ingress and verification**: `src/app.ts` routing, `src/telegram-webhook.ts`, `src/linq-webhook.ts`, and `secretMatches` / signature checks in `src/channel-gate.ts`.
+- **Webhook ingress and verification**: `src/app.ts` routing, `src/platforms.ts` (the switch that turns a platform off, see `docs/linq.md`), `src/telegram-webhook.ts`, `src/linq-webhook.ts`, and `secretMatches` / signature checks in `src/channel-gate.ts`.
 - **Access gating**: `src/channel-gate.ts` (who reaches the agent) and `src/billing.ts` (Pro plan checks, Clerk Backend API calls).
-- **Identity and account linking**: `src/trigger/link-account.ts` (Clerk OAuth device flow), `src/db/channel-links.ts`, and the `channelIdentifiers` table in `src/db/schema.ts`.
-- **Agent tools with code execution or outbound access**: `src/trigger/computer-tools.ts` (Daytona sandbox, file transfer), `src/trigger/web-tools.ts`, and the tool wiring in `src/trigger/channel-agent.ts`.
-- **Outbound messaging**: `src/trigger/channel-messengers.ts`, `src/trigger/telegram-api.ts`, `src/trigger/linq-api.ts` (who a message is sent to).
-- **Secrets and config**: anything that reads, logs, or forwards API keys or tokens, plus `trigger.config.ts` and environment-variable handling.
-- **Database access**: `src/db/` queries that filter by user, platform, or external ID, and any schema change affecting user or link data.
+- **Identity and account linking**: `src/inngest/link-account.ts` (Clerk OAuth device flow), `src/db/channel-links.ts`, and the `channelIdentifiers` table in `src/db/schema.ts`.
+- **Agent tools with code execution or outbound access**: `src/inngest/computer-tools.ts` (Daytona sandbox, file transfer), `src/inngest/web-tools.ts`, and the tool wiring in `src/inngest/agent-tools.ts` and `src/inngest/chat-turn.ts`.
+- **Outbound messaging**: `src/inngest/channels.ts`, `src/inngest/telegram-api.ts`, `src/inngest/linq-api.ts` (who a message is sent to).
+- **Secrets and config**: anything that reads, logs, or forwards API keys or tokens, plus `src/instrument.ts` and environment-variable handling.
+- **Database access**: `src/db/` queries (including `src/db/chat.ts`: the inbox, per-user lock and transcripts) that filter by user, platform, or external ID, and any schema change affecting user or link data.
 
 Also run the review for any new file that adds a webhook route, an auth or plan check, an agent tool, or handling of secrets, even if it isn't listed above. Changes that only edit user-facing message wording or comments in these files don't need a review.
 

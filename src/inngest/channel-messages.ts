@@ -1,5 +1,4 @@
-import type { UIMessage } from "ai";
-import type { Platform } from "../db/schema.js";
+import type { InboxPart, Platform } from "../db/schema.js";
 
 // Building blocks every chat channel shares: turning an inbound file into message parts the model
 // can read, and splitting long replies for platforms that cap message length
@@ -30,9 +29,8 @@ export const formatSize = (bytes?: number) =>
       ? `${(bytes / 1024).toFixed(1)} KB`
       : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
-// Inbound files become token-free https URLs on a reserved domain: the transcript keeps the URL,
-// and the channel's download() turns it back into bytes through the platform API whenever the
-// model reads it
+// Inbound files become token-free https URLs on a reserved domain: the inbox keeps the URL, and the
+// turn turns it back into bytes through the platform API whenever the model is called
 export const channelFileUrls = (platform: Platform) => {
   const prefix = `https://${platform}.invalid/files/`;
   return {
@@ -43,9 +41,13 @@ export const channelFileUrls = (platform: Platform) => {
   };
 };
 
-// Builds the user message for a turn: a note per attachment (with the id loadAttachment takes),
+// Shown when a message holds nothing the assistant can read, such as a sticker or an app card
+export const UNSUPPORTED_MESSAGE_TEXT =
+  "I can read text, photos, documents, audio and video, but not this kind of message.";
+
+// Builds the parts of a user message: a note per attachment (with the id loadAttachment takes),
 // the file itself when the model can read it, then the text
-export const toUserMessage = ({
+export const toInboxParts = ({
   platform,
   text,
   attachments,
@@ -55,9 +57,9 @@ export const toUserMessage = ({
   text?: string;
   attachments: InboundAttachment[];
   maxDownloadBytes: number;
-}): UIMessage => {
+}): InboxPart[] => {
   const { toUrl } = channelFileUrls(platform);
-  const parts: UIMessage["parts"] = [];
+  const parts: InboxPart[] = [];
   for (const attachment of attachments) {
     const tooLarge = attachment.size !== undefined && attachment.size > maxDownloadBytes;
     parts.push({
@@ -70,7 +72,7 @@ export const toUserMessage = ({
     if (!tooLarge && (attachment.size ?? Infinity) <= limit) {
       parts.push({
         type: "file",
-        url: toUrl(attachment.id),
+        data: toUrl(attachment.id),
         mediaType: attachment.mediaType,
         filename: attachment.filename,
       });
@@ -79,7 +81,7 @@ export const toUserMessage = ({
   if (text) {
     parts.push({ type: "text", text });
   }
-  return { id: "", role: "user", parts };
+  return parts;
 };
 
 // Breaks long replies on line boundaries for platforms with a message length cap

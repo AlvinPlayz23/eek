@@ -5,7 +5,7 @@ import type { MessageEventV2 } from "@linqapp/sdk/resources/webhooks";
 // Thin wrappers over the Linq API (iMessage). Sends go to an existing chat id, so replies leave from
 // the line the user wrote to and Linq's own line selection is never bypassed with a pinned `from`
 
-// Reads LINQ_API_V3_API_KEY on first use, so task indexing works without it
+// Reads LINQ_API_V3_API_KEY on first use, so importing this module works without it
 let linq: Linq | undefined;
 const client = () => (linq ??= new Linq());
 

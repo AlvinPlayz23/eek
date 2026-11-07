@@ -1,20 +1,20 @@
 import type { MessageReceivedWebhookEvent } from "@linqapp/sdk/resources/webhooks";
 import * as Sentry from "@sentry/node";
 import { Hono } from "hono";
-import { forwardToTrigger, gateInbound, upgradeMessage } from "./channel-gate.js";
-import { log } from "./log.js";
+import { enqueueChatMessage, gateInbound, upgradeMessage } from "./channel-gate.js";
+import { UNSUPPORTED_MESSAGE_TEXT } from "./inngest/channel-messages.js";
+import { parseLinqMessage } from "./inngest/inbound.js";
 import {
   isOptedOutError,
   isOptOutKeyword,
   messageText,
   sendMessage,
   unwrapWebhook,
-} from "./trigger/linq-api.js";
-
-const FORWARD_SECRET_HEADER = "x-linq-forward-secret";
+} from "./inngest/linq-api.js";
+import { log } from "./log.js";
 
 // Linq's webhook (iMessage) lands here first, and only one-to-one messages that pass the channel
-// gate are forwarded to the Trigger.dev endpoint. Linq waits 10 seconds for an answer and retries
+// gate are queued for the agent. Linq waits 10 seconds for an answer and retries
 // non-2xx (except other 4xx) for 30 minutes
 export const linqWebhook = new Hono().post("/", async (c) => {
   let event;
@@ -87,14 +87,30 @@ export const linqWebhook = new Hono().post("/", async (c) => {
       }
       return c.body(null, 200);
     case "allowed": {
-      const forwarded = await forwardToTrigger({
+      const inbound = parseLinqMessage(data);
+      if (inbound.kind === "ignore") return c.body(null, 200);
+      if (inbound.kind === "unsupported") {
+        try {
+          await sendMessage(chatId, UNSUPPORTED_MESSAGE_TEXT);
+        } catch (error) {
+          if (isOptedOutError(error)) return c.body(null, 200);
+          Sentry.captureException(error);
+          log.error("Unsupported-message reply failed", {
+            "channel.platform": "linq",
+            "channel.event_id": event.event_id,
+          });
+          return c.text("Upstream error", 502);
+        }
+        return c.body(null, 200);
+      }
+      const queued = await enqueueChatMessage({
         platform: "linq",
-        url: process.env.TRIGGER_LINQ_WEBHOOK_URL!,
-        secretHeader: FORWARD_SECRET_HEADER,
-        secret: process.env.TRIGGER_LINQ_WEBHOOK_SECRET!,
-        body: { ...event, clerkUserId: gate.clerkUserId },
+        externalMessageId: inbound.externalMessageId,
+        clerkUserId: gate.clerkUserId,
+        chatId: inbound.chatId,
+        parts: inbound.parts,
       });
-      return forwarded ? c.body(null, 200) : c.text("Upstream error", 502);
+      return queued ? c.body(null, 200) : c.text("Upstream error", 502);
     }
   }
 });

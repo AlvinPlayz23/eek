@@ -28,5 +28,3 @@ lerna-debug.log*
 .DS_Store
 .neon
 
-# trigger.dev
-.trigger
