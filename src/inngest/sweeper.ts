@@ -1,5 +1,6 @@
 import { deleteOldProcessed, strandedConversations } from "../db/chat.js";
 import { log } from "../log.js";
+import { isPlatformEnabled } from "../platforms.js";
 import { inngest } from "./client.js";
 import { chatMessageReceived } from "./events.js";
 import { reportFailure } from "./failure.js";
@@ -15,7 +16,10 @@ export const sweepInbox = inngest.createFunction(
     },
   },
   async ({ step }) => {
-    const stranded = await step.run("find-stranded", () => strandedConversations(2));
+    // A switched-off platform's leftovers wait until it is switched back on
+    const stranded = (await step.run("find-stranded", () => strandedConversations(2))).filter(
+      (conversation) => isPlatformEnabled(conversation.platform)
+    );
     if (stranded.length > 0) {
       log.warn("Restarting stranded conversations", { "chat.stranded": stranded.length });
       await step.sendEvent(

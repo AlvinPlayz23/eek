@@ -20,7 +20,7 @@ Whenever a change touches a security-critical layer, run a Greptile review of th
 
 Security-critical layers in this app:
 
-- **Webhook ingress and verification**: `src/app.ts` routing, `src/telegram-webhook.ts`, `src/linq-webhook.ts`, and `secretMatches` / signature checks in `src/channel-gate.ts`.
+- **Webhook ingress and verification**: `src/app.ts` routing, `src/platforms.ts` (the switch that turns a platform off, see `docs/linq.md`), `src/telegram-webhook.ts`, `src/linq-webhook.ts`, and `secretMatches` / signature checks in `src/channel-gate.ts`.
 - **Access gating**: `src/channel-gate.ts` (who reaches the agent) and `src/billing.ts` (Pro plan checks, Clerk Backend API calls).
 - **Identity and account linking**: `src/inngest/link-account.ts` (Clerk OAuth device flow), `src/db/channel-links.ts`, and the `channelIdentifiers` table in `src/db/schema.ts`.
 - **Agent tools with code execution or outbound access**: `src/inngest/computer-tools.ts` (Daytona sandbox, file transfer), `src/inngest/web-tools.ts`, and the tool wiring in `src/inngest/agent-tools.ts` and `src/inngest/chat-turn.ts`.

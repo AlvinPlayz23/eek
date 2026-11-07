@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import { serve } from 'inngest/hono'
 import { functions, inngest } from './inngest/index.js'
 import { linqWebhook } from './linq-webhook.js'
+import { requirePlatform } from './platforms.js'
 import { telegramWebhook } from './telegram-webhook.js'
 
 const app = new Hono()
@@ -22,6 +23,8 @@ app.get('/', (c) => {
 })
 
 app.route('/telegram/webhook', telegramWebhook)
+// Linq (iMessage) is switched off unless LINQ_ENABLED=true; see docs/linq.md
+app.use('/linq/webhook', requirePlatform('linq'))
 app.route('/linq/webhook', linqWebhook)
 
 // Inngest calls the agent's functions here: signed requests that run one or more steps of a run

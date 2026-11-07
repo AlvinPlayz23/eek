@@ -1,13 +1,14 @@
 # Personal assistant
 
-A chat assistant on Telegram and iMessage (through Linq). Users link their chat account to a Clerk
+A chat assistant on Telegram. iMessage (through Linq) is built in but switched off; see
+[docs/linq.md](docs/linq.md). Users link their chat account to a Clerk
 account, and Pro subscribers talk to an agent that can browse the web and use its own Linux computer
 (Daytona).
 
 ## How it works
 
 ```
-Telegram / Linq ──webhook──▶ Hono (Vercel) ──▶ Postgres inbox ──event──▶ Inngest ──▶ /api/inngest
+Telegram (and Linq, off) ──webhook──▶ Hono (Vercel) ──▶ Postgres inbox ──event──▶ Inngest ──▶ /api/inngest
                               verify + gate                                           chat-turn, link, sweeper
 ```
 
@@ -79,11 +80,10 @@ The platforms can only call a public URL, so expose port 3000 with a tunnel (for
     -d "secret_token=$TELEGRAM_WEBHOOK_SECRET"
   ```
 
-- **Linq:** point a webhook subscription for `message.received` events at
-  `https://<tunnel>/linq/webhook`, and put its signing secret in `LINQ_WEBHOOK_SECRET`.
+- **Linq:** switched off. To try it locally, follow [docs/linq.md](docs/linq.md).
 
-Use a separate bot and a separate Linq line for development, so you don't take over production
-traffic. A Telegram bot has only one webhook at a time.
+Use a separate bot for development, so you don't take over production traffic. A Telegram bot has
+only one webhook at a time.
 
 ## Set it up in the cloud
 
@@ -95,7 +95,8 @@ traffic. A Telegram bot has only one webhook at a time.
    - Clerk: a confidential OAuth app with the Device Authorization Grant enabled (for account
      linking), plus billing with a `pro` plan. Users without an active Pro subscription are asked
      to upgrade.
-   - Telegram bot, Linq line and webhook, Daytona, Firecrawl, and the Neon AI Gateway for the model.
+   - Telegram bot, Daytona, Firecrawl, and the Neon AI Gateway for the model. Linq is off, so it
+     needs no setup (see [docs/linq.md](docs/linq.md)).
    - Sentry (optional): set `SENTRY_DSN`.
 
 3. **Vercel.**
@@ -119,7 +120,7 @@ traffic. A Telegram bot has only one webhook at a time.
    Vercel variables:
    - Telegram: `setWebhook` with `url=https://<your-domain>/telegram/webhook` and
      `secret_token=<TELEGRAM_WEBHOOK_SECRET>`.
-   - Linq: `https://<your-domain>/linq/webhook`.
+   - Linq is off: `/linq/webhook` answers 404 until `LINQ_ENABLED=true` (see docs/linq.md).
 
 6. **Smoke test.** Message the bot from an unlinked account. You should get a sign-in link. After
    signing in, and with a Pro subscription, send another message and watch the run in the Inngest
