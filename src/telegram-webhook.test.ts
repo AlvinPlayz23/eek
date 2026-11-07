@@ -17,7 +17,12 @@ mock.module("./inngest/client.js", {
   },
 });
 mock.module("./billing.js", {
-  exports: { hasProPlan: async () => pro, upgradeUrl: () => "https://upgrade.example" },
+  exports: {
+    hasProPlan: async () => pro,
+    upgradeUrl: () => "https://upgrade.example",
+    // The gate imports the class to recognise a failed lookup; this mock never throws one
+    BillingLookupError: class BillingLookupError extends Error {},
+  },
 });
 
 process.env.TELEGRAM_WEBHOOK_SECRET = "s3cret";
