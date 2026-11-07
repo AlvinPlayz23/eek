@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import * as Sentry from "@sentry/node";
-import { hasProPlan, upgradeUrl } from "./billing.js";
+import { BillingLookupError, hasProPlan, upgradeUrl } from "./billing.js";
 import { findChannelLink } from "./db/channel-links.js";
 import { insertInbox } from "./db/chat.js";
 import type { InboxPart, Platform } from "./db/schema.js";
@@ -94,3 +94,13 @@ export const enqueueChatMessage = async ({
     return false;
   }
 };
+
+// What is safe to log about a failed gate: the error's class, and for a Clerk lookup the HTTP status
+// and Clerk's error code (for example 401 for a wrong CLERK_SECRET_KEY). Never the message, which
+// can carry a response body
+export const gateErrorAttributes = (error: unknown) => ({
+  "error.name": error instanceof Error ? error.name : "unknown",
+  ...(error instanceof BillingLookupError
+    ? { "http.response.status_code": error.status, "clerk.error_code": error.clerkCode }
+    : {}),
+});

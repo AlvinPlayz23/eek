@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/node";
 import { Hono } from "hono";
-import { enqueueChatMessage, gateInbound, secretMatches, upgradeMessage } from "./channel-gate.js";
+import { enqueueChatMessage, gateErrorAttributes, gateInbound, secretMatches, upgradeMessage } from "./channel-gate.js";
 import { UNSUPPORTED_MESSAGE_TEXT } from "./inngest/channel-messages.js";
 import { parseTelegramMessage, type TelegramUpdate } from "./inngest/inbound.js";
 import { log } from "./log.js";
@@ -36,6 +36,7 @@ export const telegramWebhook = new Hono().post("/", async (c) => {
     log.error("Channel gate failed", {
       "channel.platform": "telegram",
       "channel.event_id": update.update_id,
+      ...gateErrorAttributes(error),
     });
     return c.text("Upstream error", 502);
   }
