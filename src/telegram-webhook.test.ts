@@ -19,6 +19,17 @@ mock.module("./inngest/client.js", {
 mock.module("./billing.js", {
   exports: { hasProPlan: async () => pro, upgradeUrl: () => "https://upgrade.example" },
 });
+// The welcome is sent through the Bot API; capture it instead of calling Telegram
+const texts: string[] = [];
+mock.module("./inngest/telegram-api.js", {
+  exports: {
+    sendMessage: async (_chatId: number, text: string) => (texts.push(text), 1),
+    sendFile: async () => 1,
+    downloadFile: async () => new Uint8Array(),
+    MAX_DOWNLOAD_BYTES: 20 * 1024 * 1024,
+    MAX_UPLOAD_BYTES: 50 * 1024 * 1024,
+  },
+});
 
 process.env.TELEGRAM_WEBHOOK_SECRET = "s3cret";
 const { db } = await import("./db/index.js");
@@ -41,6 +52,7 @@ const externalUserId = String(Number(userId.slice(3)) % 1e9);
 describe("telegram webhook", { skip: !process.env.DATABASE_URL }, () => {
   beforeEach(() => {
     sent.length = 0;
+    texts.length = 0;
     sendFails = false;
     pro = true;
   });
@@ -101,6 +113,22 @@ describe("telegram webhook", { skip: !process.env.DATABASE_URL }, () => {
       const body = (await (await post(update({ text: "hello" }, 10))).json()) as { text: string };
       assert.match(body.text, /Pro plan/);
       assert.equal(sent.length, 0);
+    });
+
+    test("after upgrading, the welcome is sent once, before the message is queued", async () => {
+      pro = false;
+      await post(update({ text: "hello" }, 20));
+      pro = true;
+      const first = await post(update({ text: "hello again" }, 21));
+      assert.equal(first.status, 200);
+      assert.deepEqual(texts, ["You have upgraded to Pro. You are now free to ask me anything."]);
+      assert.equal(sent.length, 1);
+      assert.equal(sent[0]!.name, "chat/message.received");
+      const second = await post(update({ text: "and again" }, 22));
+      assert.equal(second.status, 200);
+      assert.equal(sent.length, 2);
+      // Only once
+      assert.equal(texts.length, 1);
     });
 
     test("a photo is queued with a file part and an attachment note", async () => {

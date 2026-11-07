@@ -1,7 +1,12 @@
 import type { MessageReceivedWebhookEvent } from "@linqapp/sdk/resources/webhooks";
 import * as Sentry from "@sentry/node";
 import { Hono } from "hono";
-import { enqueueChatMessage, gateInbound, upgradeMessage } from "./channel-gate.js";
+import {
+  enqueueChatMessage,
+  gateInbound,
+  proWelcomeMessage,
+  upgradeMessage,
+} from "./channel-gate.js";
 import { UNSUPPORTED_MESSAGE_TEXT } from "./inngest/channel-messages.js";
 import { parseLinqMessage } from "./inngest/inbound.js";
 import {
@@ -102,6 +107,13 @@ export const linqWebhook = new Hono().post("/", async (c) => {
           return c.text("Upstream error", 502);
         }
         return c.body(null, 200);
+      }
+      if (gate.welcome) {
+        try {
+          await sendMessage(chatId, proWelcomeMessage());
+        } catch (error) {
+          if (!isOptedOutError(error)) throw error;
+        }
       }
       const queued = await enqueueChatMessage({
         platform: "linq",
