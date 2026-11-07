@@ -35,7 +35,7 @@ for the services you want to exercise.
 
    ```
    npm install
-   cp .env.example .env
+   cp .env.example .env      # on Windows PowerShell: Copy-Item .env.example .env
    ```
 
 2. Fill in `.env`. See `.env.example` for every variable. For local development:
@@ -95,8 +95,9 @@ only one webhook at a time.
    - Clerk: a confidential OAuth app with the Device Authorization Grant enabled (for account
      linking), plus billing with a `pro` plan. Users without an active Pro subscription are asked
      to upgrade.
-   - Telegram bot, Daytona, Firecrawl, and the Neon AI Gateway for the model. Linq is off, so it
-     needs no setup (see [docs/linq.md](docs/linq.md)).
+   - Telegram bot, Daytona, Firecrawl, and an OpenAI-compatible API for the model
+     (`OPENAI_BASEURL`, `OPENAI_MODEL`, `OPENAI_API_KEY`). Linq is off, so it needs no setup (see
+     [docs/linq.md](docs/linq.md)).
    - Sentry (optional): set `SENTRY_DSN`.
 
 3. **Vercel.**
