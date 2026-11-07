@@ -1,7 +1,7 @@
 import type { MessageReceivedWebhookEvent } from "@linqapp/sdk/resources/webhooks";
 import * as Sentry from "@sentry/node";
 import { Hono } from "hono";
-import { enqueueChatMessage, gateInbound, upgradeMessage } from "./channel-gate.js";
+import { enqueueChatMessage, gateErrorAttributes, gateInbound, upgradeMessage } from "./channel-gate.js";
 import { UNSUPPORTED_MESSAGE_TEXT } from "./inngest/channel-messages.js";
 import { parseLinqMessage } from "./inngest/inbound.js";
 import {
@@ -60,6 +60,7 @@ export const linqWebhook = new Hono().post("/", async (c) => {
     log.error("Channel gate failed", {
       "channel.platform": "linq",
       "channel.event_id": event.event_id,
+      ...gateErrorAttributes(error),
     });
     return c.text("Upstream error", 502);
   }
