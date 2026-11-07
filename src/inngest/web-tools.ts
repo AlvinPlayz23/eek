@@ -18,7 +18,7 @@ const capOutput = (tool: Tool): Tool => ({
   },
 });
 
-// Both read FIRECRAWL_API_KEY lazily, on first call, so task indexing works without it.
+// Both read FIRECRAWL_API_KEY lazily, on first call, so importing this module works without it.
 // FirecrawlTools() is avoided because it throws at import time when the key is missing
 const alexandria = AlexandriaTools();
 

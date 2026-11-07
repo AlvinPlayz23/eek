@@ -1,0 +1,29 @@
+import { deleteOldProcessed, strandedConversations } from "../db/chat.js";
+import { log } from "../log.js";
+import { inngest } from "./client.js";
+import { chatMessageReceived } from "./events.js";
+import { reportFailure } from "./failure.js";
+
+// Safety net for the inbox: a message nobody is working on (its run died, or its event was lost)
+// would otherwise wait for the user's next message. This starts a run for each such conversation
+export const sweepInbox = inngest.createFunction(
+  {
+    id: "sweep-inbox",
+    triggers: { cron: "*/15 * * * *" },
+    onFailure: async ({ error, event }) => {
+      await reportFailure(error, { function: "sweep-inbox", runId: event.data.run_id });
+    },
+  },
+  async ({ step }) => {
+    const stranded = await step.run("find-stranded", () => strandedConversations(2));
+    if (stranded.length > 0) {
+      log.warn("Restarting stranded conversations", { "chat.stranded": stranded.length });
+      await step.sendEvent(
+        "restart",
+        stranded.map((conversation) => chatMessageReceived.create(conversation))
+      );
+    }
+    await step.run("delete-processed", () => deleteOldProcessed(24));
+    return { restarted: stranded.length };
+  }
+);

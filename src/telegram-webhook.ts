@@ -1,20 +1,14 @@
 import * as Sentry from "@sentry/node";
 import { Hono } from "hono";
-import { forwardToTrigger, gateInbound, secretMatches, upgradeMessage } from "./channel-gate.js";
+import { enqueueChatMessage, gateInbound, secretMatches, upgradeMessage } from "./channel-gate.js";
+import { UNSUPPORTED_MESSAGE_TEXT } from "./inngest/channel-messages.js";
+import { parseTelegramMessage, type TelegramUpdate } from "./inngest/inbound.js";
 import { log } from "./log.js";
-
-type TelegramUpdate = {
-  update_id: number;
-  message?: {
-    chat: { id: number; type: "private" | "group" | "supergroup" | "channel" };
-    from?: { id: number };
-  };
-};
 
 const SECRET_HEADER = "x-telegram-bot-api-secret-token";
 
 // Telegram's webhook lands here first, and only private-chat messages that pass the channel gate
-// are forwarded to the Trigger.dev endpoint
+// are queued for the agent
 export const telegramWebhook = new Hono().post("/", async (c) => {
   if (!secretMatches(c.req.header(SECRET_HEADER), process.env.TELEGRAM_WEBHOOK_SECRET)) {
     // Either a misconfigured secret (every message stops reaching the agent) or someone probing
@@ -59,14 +53,19 @@ export const telegramWebhook = new Hono().post("/", async (c) => {
       // Replying in the webhook response makes Telegram send the message, with no extra API call
       return c.json({ method: "sendMessage", chat_id: message.chat.id, text: upgradeMessage() });
     case "allowed": {
-      const forwarded = await forwardToTrigger({
+      const inbound = parseTelegramMessage(message);
+      if (inbound.kind === "ignore") return c.body(null, 200);
+      if (inbound.kind === "unsupported") {
+        return c.json({ method: "sendMessage", chat_id: message.chat.id, text: UNSUPPORTED_MESSAGE_TEXT });
+      }
+      const queued = await enqueueChatMessage({
         platform: "telegram",
-        url: process.env.TRIGGER_TELEGRAM_WEBHOOK_URL!,
-        secretHeader: SECRET_HEADER,
-        secret: process.env.TRIGGER_TELEGRAM_WEBHOOK_SECRET!,
-        body: { ...update, clerkUserId: gate.clerkUserId },
+        externalMessageId: inbound.externalMessageId,
+        clerkUserId: gate.clerkUserId,
+        chatId: inbound.chatId,
+        parts: inbound.parts,
       });
-      return forwarded ? c.body(null, 200) : c.text("Upstream error", 502);
+      return queued ? c.body(null, 200) : c.text("Upstream error", 502);
     }
   }
 });
