@@ -1,9 +1,16 @@
 import * as Sentry from "@sentry/node";
 import { Hono } from "hono";
-import { enqueueChatMessage, gateInbound, secretMatches, upgradeMessage } from "./channel-gate.js";
+import {
+  enqueueChatMessage,
+  gateInbound,
+  proWelcomeMessage,
+  secretMatches,
+  upgradeMessage,
+} from "./channel-gate.js";
 import { UNSUPPORTED_MESSAGE_TEXT } from "./inngest/channel-messages.js";
 import { parseTelegramMessage, type TelegramUpdate } from "./inngest/inbound.js";
 import { log } from "./log.js";
+import { sendMessage } from "./inngest/telegram-api.js";
 
 const SECRET_HEADER = "x-telegram-bot-api-secret-token";
 
@@ -57,6 +64,10 @@ export const telegramWebhook = new Hono().post("/", async (c) => {
       if (inbound.kind === "ignore") return c.body(null, 200);
       if (inbound.kind === "unsupported") {
         return c.json({ method: "sendMessage", chat_id: message.chat.id, text: UNSUPPORTED_MESSAGE_TEXT });
+      }
+      // The welcome goes out in this response, so it arrives before the agent's answer
+      if (gate.welcome) {
+        await sendMessage(message.chat.id, proWelcomeMessage());
       }
       const queued = await enqueueChatMessage({
         platform: "telegram",

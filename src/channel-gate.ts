@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import * as Sentry from "@sentry/node";
 import { hasProPlan, upgradeUrl } from "./billing.js";
-import { findChannelLink } from "./db/channel-links.js";
+import { claimProWelcome, findChannelLink, markUpgradePrompted } from "./db/channel-links.js";
 import { insertInbox } from "./db/chat.js";
 import type { InboxPart, Platform } from "./db/schema.js";
 import { inngest } from "./inngest/client.js";
@@ -19,6 +19,10 @@ export const secretMatches = (received: string | undefined, expected: string | u
   return a.length === b.length && timingSafeEqual(a, b);
 };
 
+// Sent once, on the first message after a user who was shown the upgrade prompt is on Pro
+export const proWelcomeMessage = () =>
+  "You have upgraded to Pro. You are now free to ask me anything.";
+
 export const upgradeMessage = () =>
   [
     "The assistant is available on the Pro plan.",
@@ -31,7 +35,8 @@ export type GateResult =
   | { status: "linking" }
   // Linked, but not on Pro: the webhook replies with upgradeMessage() its own way
   | { status: "upgrade" }
-  | { status: "allowed"; clerkUserId: string };
+  // `welcome` is true for the first message after a prompted user subscribed
+  | { status: "allowed"; clerkUserId: string; welcome: boolean };
 
 // Throws when the plan check fails, so the webhook can answer with a non-2xx and the platform
 // redelivers instead of the message being dropped
@@ -54,9 +59,15 @@ export const gateInbound = async ({
 
   // Opaque Clerk id only: attributes this request's logs, errors and spans to the user
   Sentry.setUser({ id: link.clerkUserId });
-  return (await hasProPlan(link.clerkUserId))
-    ? { status: "allowed", clerkUserId: link.clerkUserId }
-    : { status: "upgrade" };
+  if (!(await hasProPlan(link.clerkUserId))) {
+    await markUpgradePrompted(platform, externalUserId);
+    return { status: "upgrade" };
+  }
+  return {
+    status: "allowed",
+    clerkUserId: link.clerkUserId,
+    welcome: await claimProWelcome(platform, externalUserId),
+  };
 };
 
 // Queues an allowed message for the agent: stored in the inbox first, then announced. Returns false

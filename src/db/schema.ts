@@ -26,6 +26,9 @@ export const channelIdentifiers = pgTable(
     externalUserId: text("external_user_id").notNull(),
     clerkUserId: text("clerk_user_id").notNull(),
     linkedAt: timestamp("linked_at", { withTimezone: true }).notNull().defaultNow(),
+    // When the user was last told to upgrade. Cleared once they are on Pro, which is when the
+    // one-time welcome is sent (see channel-gate.ts)
+    upgradePromptedAt: timestamp("upgrade_prompted_at", { withTimezone: true }),
   },
   (table) => [
     uniqueIndex("channel_identifiers_platform_external_user_id_idx").on(
