@@ -7,7 +7,7 @@ export function LogoMark({ className = "h-7 w-7" }: { className?: string }) {
         className="fill-surface-two stroke-fog/20"
         strokeWidth="1"
       />
-      <circle cx="12.6" cy="13.5" r="1.7" className="fill-electric-blue" />
+      <circle cx="12.6" cy="13.5" r="1.7" className="fill-cobalt" />
       <circle cx="16.4" cy="13.5" r="1.7" className="fill-fog/55" />
       <circle cx="20.2" cy="13.5" r="1.7" className="fill-fog/25" />
     </svg>
@@ -16,10 +16,10 @@ export function LogoMark({ className = "h-7 w-7" }: { className?: string }) {
 
 export function Logo() {
   return (
-    <a href="/" className="inline-flex items-center gap-2.5" aria-label="Personal Assistant home">
+    <a href="/" className="inline-flex items-center gap-2.5" aria-label="Personal assistant home">
       <LogoMark />
-      <span className="text-[15px] font-semibold tracking-[-0.022em] text-paper-white max-[359px]:hidden">
-        Personal Assistant
+      <span className="whitespace-nowrap text-[15px] font-semibold tracking-[-0.022em] text-ivory max-[359px]:hidden">
+        Personal assistant
       </span>
     </a>
   );
