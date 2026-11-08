@@ -29,3 +29,5 @@ lerna-debug.log*
 .DS_Store
 .neon
 set_webhook.bat
+.emil-skills/
+.unslop/
