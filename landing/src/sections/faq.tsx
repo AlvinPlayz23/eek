@@ -1,12 +1,12 @@
-import { Plus } from "lucide-react";
 import { Container } from "../components/container";
+import { Disclosure } from "../components/disclosure";
 import { Reveal } from "../components/reveal";
 import { Section } from "../components/section";
 import { SectionHeader } from "../components/section-header";
 
 const faqs = [
   {
-    question: "What exactly is Personal Assistant?",
+    question: "What exactly is Personal assistant?",
     answer:
       "A chat assistant that runs on Telegram. You link your account once, then talk to it like a person: reminders, email, the web, and its own Linux computer.",
   },
@@ -39,28 +39,18 @@ const faqs = [
 
 export function Faq() {
   return (
-    <Section id="faq">
+    <Section id="faq" aria-labelledby="faq-title">
       <Container>
-        <Reveal>
-          <SectionHeader eyebrow="FAQ" line1="Questions," line2="answered.">
-            The short version of how the assistant works, what Pro covers, and what happens to your
-            data.
-          </SectionHeader>
-        </Reveal>
+        <SectionHeader id="faq-title" line1="Questions" line2="Answered">
+          How the assistant works, what Pro covers, and what happens to your data.
+        </SectionHeader>
 
-        <Reveal delay={80} className="mt-12">
-          <div className="divide-y divide-fog/10 border-y border-fog/10">
+        <Reveal className="mt-14">
+          <div className="mx-auto max-w-3xl">
             {faqs.map((faq, index) => (
-              <details key={faq.question} className="group py-5" open={index === 0}>
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-6 text-base font-medium text-paper-white">
-                  {faq.question}
-                  <Plus
-                    className="h-4 w-4 shrink-0 text-steel transition-transform duration-200 group-open:rotate-45 motion-reduce:transition-none"
-                    aria-hidden="true"
-                  />
-                </summary>
-                <p className="mt-3 max-w-2xl pr-8 text-body text-mid-gray">{faq.answer}</p>
-              </details>
+              <Disclosure key={faq.question} question={faq.question} defaultOpen={index === 0}>
+                {faq.answer}
+              </Disclosure>
             ))}
           </div>
         </Reveal>
