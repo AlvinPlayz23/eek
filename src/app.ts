@@ -40,4 +40,10 @@ app.route('/linq/webhook', linqWebhook)
 // Inngest calls the agent's functions here: signed requests that run one or more steps of a run
 app.on(['GET', 'POST', 'PUT'], '/api/inngest', serve({ client: inngest, functions }))
 
+// The marketing site is a separate Vite build in public/landing, mounted at /landing/. The
+// catch-all is registered after the API and webhook routes so it only serves what nothing else
+// claimed; it keeps `pnpm dev` and `pnpm start` behaving like Vercel's static layer
+app.get('/landing', (c) => c.redirect('/landing/'))
+app.use('/landing/*', serveStatic({ root: './public' }))
+
 export default app

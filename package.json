@@ -4,8 +4,9 @@
   "scripts": {
     "dev": "tsx watch --env-file=.env --import ./src/instrument.ts src/local.ts",
     "inngest:dev": "inngest-cli dev -u http://localhost:3000/api/inngest --no-discovery",
-    "build": "tsc && pnpm --filter web build",
+    "build": "tsc && pnpm --filter web build && pnpm --filter landing build",
     "dev:web": "pnpm --filter web dev",
+    "dev:landing": "pnpm --filter landing dev",
     "start": "node --import ./dist/src/instrument.js dist/src/local.js",
     "test": "tsx --test --experimental-test-module-mocks \"src/**/*.test.ts\"",
     "db:studio": "node --env-file=.env ./node_modules/drizzle-kit/bin.cjs studio",

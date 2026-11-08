@@ -124,7 +124,13 @@ const runTool = async (
   keepLock: KeepLock,
   id: string,
   call: Call,
-  context: { sandboxName: string; platform: Platform; chatId: string; clerkUserId: string }
+  context: {
+    sandboxName: string;
+    platform: Platform;
+    chatId: string;
+    clerkUserId: string;
+    turnId: string;
+  }
 ): Promise<ToolResultPart> => {
   const channel = CHANNELS[context.platform];
   const result = (output: ToolOutput): ToolResultPart => ({
@@ -153,6 +159,9 @@ const runTool = async (
             return await executeGmailTool(call.toolName, call.input, {
               clerkUserId: context.clerkUserId,
               toolCallId: call.toolCallId,
+              platform: context.platform,
+              chatId: context.chatId,
+              turnId: context.turnId,
             });
           }
           if (isComputerTool(call.toolName)) {
@@ -208,6 +217,7 @@ const runAgentTurn = async ({
   step,
   keepLock,
   turn,
+  turnId,
   platform,
   clerkUserId,
   chatId,
@@ -217,6 +227,7 @@ const runAgentTurn = async ({
   step: Step;
   keepLock: KeepLock;
   turn: number;
+  turnId: string;
   platform: Platform;
   clerkUserId: string;
   chatId: string;
@@ -307,6 +318,7 @@ const runAgentTurn = async ({
           platform,
           chatId,
           clerkUserId,
+          turnId,
         })
       )
     );
@@ -407,6 +419,8 @@ export const chatTurn = inngest.createFunction(
         step,
         keepLock,
         turn,
+        // Unique per user turn: a draft must survive into a later turn before it can be sent
+        turnId: `${runId}-${turn}`,
         platform,
         clerkUserId,
         chatId: replyChatId,

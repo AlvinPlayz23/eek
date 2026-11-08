@@ -1,0 +1,182 @@
+@import "tailwindcss";
+
+/* Morphic — dark cinema canvas.
+ * Pure black absorbs everything except the electric-blue pulse of the single accent.
+ * The surface stack is the only depth; there are no gradients and no component shadows. */
+@theme {
+  /* Surfaces — the only four levels. Never add a shade between them */
+  --color-pure-black: #000000;
+  --color-surface-one: #212121;
+  --color-surface-two: #292929;
+  --color-surface-three: #333333;
+
+  /* Ink */
+  --color-paper-white: #ffffff;
+  --color-mist: #f5f5f5;
+  --color-mid-gray: #999999;
+  --color-steel: #737373;
+  --color-graphite: #666666;
+  --color-slate: #525252;
+  --color-charcoal: #404040;
+  --color-fog: #e5e7eb;
+
+  /* The only chromatic accent in the system */
+  --color-electric-blue: #0075ff;
+
+  /* Inter carries every weight and size. Geist/system are the documented fallbacks */
+  --font-sans: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    sans-serif;
+
+  /* Type scale */
+  --text-caption: 10px;
+  --text-caption--line-height: 1.4;
+  --text-caption--letter-spacing: -0.01em;
+
+  --text-body: 14px;
+  --text-body--line-height: 1.5;
+  --text-body--letter-spacing: -0.01em;
+
+  --text-body-lg: 18px;
+  --text-body-lg--line-height: 1.45;
+  --text-body-lg--letter-spacing: -0.022em;
+
+  --text-heading-sm: 20px;
+  --text-heading-sm--line-height: 1.33;
+  --text-heading-sm--letter-spacing: -0.022em;
+  --text-heading-sm--font-weight: 600;
+
+  --text-heading: 40px;
+  --text-heading--line-height: 1.15;
+  --text-heading--letter-spacing: -0.048em;
+  --text-heading--font-weight: 700;
+
+  --text-display: 52px;
+  --text-display--line-height: 1.15;
+  --text-display--letter-spacing: -0.062em;
+  --text-display--font-weight: 700;
+
+  /* Radii — 7 buttons/badges · 10 cards · 16 large cards · 24 modals · 100 pills */
+  --radius-md: 7px;
+  --radius-lg: 10px;
+  --radius-2xl: 16px;
+  --radius-3xl: 24px;
+  --radius-4xl: 32px;
+  --radius-full: 100px;
+
+  /* The one shadow in the system, reserved for image cards */
+  --shadow-xl: rgba(0, 0, 0, 0.1) 0px 20px 25px -5px, rgba(0, 0, 0, 0.1) 0px 8px 10px -6px;
+}
+
+@layer base {
+  html {
+    background-color: var(--color-pure-black);
+    color-scheme: dark;
+    scroll-behavior: smooth;
+    scroll-padding-top: 88px;
+  }
+
+  body {
+    margin: 0;
+    overflow-x: clip;
+    background-color: var(--color-pure-black);
+    color: var(--color-mid-gray);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11" 1, "ss01" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: var(--color-electric-blue);
+    color: var(--color-paper-white);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-electric-blue);
+    outline-offset: 3px;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    color: var(--color-paper-white);
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  summary::-webkit-details-marker {
+    display: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+}
+
+@layer components {
+  /* Two-tone display type: statement in white, context in mid gray, same size and weight */
+  .headline-display {
+    font-size: clamp(2.6rem, 5.4vw, 3.25rem);
+    line-height: 1.12;
+    letter-spacing: -0.062em;
+    font-weight: 700;
+  }
+
+  .headline-section {
+    font-size: clamp(2rem, 4.2vw, 2.5rem);
+    line-height: 1.15;
+    letter-spacing: -0.048em;
+    font-weight: 700;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* One orchestrated page load for the hero */
+  .rise {
+    animation: rise 800ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: var(--rise-delay, 0ms);
+  }
+
+  /* Scroll-in for the sections below the fold */
+  .reveal {
+    opacity: 0;
+    transform: translateY(20px);
+    transition:
+      opacity 700ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition-delay: var(--reveal-delay, 0ms);
+  }
+
+  .reveal[data-visible="true"] {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise,
+  .reveal {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}

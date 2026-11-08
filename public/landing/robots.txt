@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+# The marketing site lives at /, the signed-in dashboard at /dashboard/.

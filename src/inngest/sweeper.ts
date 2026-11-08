@@ -1,4 +1,5 @@
 import { deleteOldProcessed, strandedConversations } from "../db/chat.js";
+import { pruneExpiredPendingSends } from "../db/pending-sends.js";
 import { log } from "../log.js";
 import { isPlatformEnabled } from "../platforms.js";
 import { inngest } from "./client.js";
@@ -28,6 +29,8 @@ export const sweepInbox = inngest.createFunction(
       );
     }
     await step.run("delete-processed", () => deleteOldProcessed(24));
+    // Drafts waiting for confirmation that were never sent: the row is useless once it expires
+    await step.run("prune-pending-sends", () => pruneExpiredPendingSends());
     return { restarted: stranded.length };
   }
 );

@@ -77,7 +77,7 @@ export function ConnectionsPage() {
     <div className="reveal flex flex-col gap-6">
       <PageHeader
         title="Connections"
-        description="External services your assistant can use on your behalf. Nothing here can send, delete, or move data without you asking in chat."
+        description="External services your assistant can use on your behalf. Gmail can read and draft mail, but only sends once you confirm the draft in chat."
       />
 
       <InlineError message={error} />
@@ -129,8 +129,8 @@ export function ConnectionsPage() {
                 </p>
                 <p className="mt-0.5 truncate text-[12px] leading-[1.5] text-graphite">
                   {gmail?.connected
-                    ? `Searching and reading ${gmail.email ?? "your inbox"} from chat. Read-only.`
-                    : "Let the assistant search and read your email from chat. Read-only — it can't send or delete."}
+                    ? `Reading and drafting mail for ${gmail.email ?? "your inbox"}. Sends only after you confirm a draft in chat.`
+                    : "Let the assistant search, read and draft email from chat. It sends only after you confirm a draft."}
                 </p>
               </div>
               {gmail?.connected ? (
@@ -182,9 +182,9 @@ export function ConnectionsPage() {
             <AlertDialogTitle>Connect Gmail?</AlertDialogTitle>
             <AlertDialogDescription>
               You'll be taken to an external page (Composio, then Google) to sign in and approve
-              access. Your password stays with Google — the assistant only gets read-only access
-              via Composio, and you can disconnect anytime from this page. Finish there and you'll
-              come back here.
+              access. Your password stays with Google. The assistant can read and draft email, but
+              it can only send a draft after you explicitly confirm it in chat — and you can
+              disconnect anytime from this page. Finish there and you'll come back here.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

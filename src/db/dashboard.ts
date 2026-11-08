@@ -6,6 +6,7 @@ import {
   chatLocks,
   chatTranscripts,
   gmailConnections,
+  pendingSends,
   reminders,
   userProfiles,
 } from "./schema.js";
@@ -18,6 +19,7 @@ export const deleteUserData = async (clerkUserId: string) => {
   await db.delete(chatLocks).where(eq(chatLocks.clerkUserId, clerkUserId));
   await db.delete(chatTranscripts).where(eq(chatTranscripts.clerkUserId, clerkUserId));
   await db.delete(gmailConnections).where(eq(gmailConnections.clerkUserId, clerkUserId));
+  await db.delete(pendingSends).where(eq(pendingSends.clerkUserId, clerkUserId));
   await db.delete(channelIdentifiers).where(eq(channelIdentifiers.clerkUserId, clerkUserId));
   await db.delete(userProfiles).where(eq(userProfiles.clerkUserId, clerkUserId));
 };

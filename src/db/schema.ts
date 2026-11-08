@@ -183,3 +183,41 @@ export const gmailConnections = pgTable("gmail_connections", {
 
 export type GmailConnection = typeof gmailConnections.$inferSelect;
 export type NewGmailConnection = typeof gmailConnections.$inferInsert;
+
+// A Gmail draft the assistant wrote, waiting for the user to confirm sending. The send tool only
+// fires for a row scoped to the same user and chat, and refuses the turn that created the draft, so
+// a draft can never be sent in the same breath it was written (and email content can't smuggle in a
+// send). Rows expire so an old draft is never sent by mistake
+export const pendingSends = pgTable(
+  "pending_sends",
+  {
+    draftId: text("draft_id").primaryKey(),
+    clerkUserId: text("clerk_user_id").notNull(),
+    platform: text("platform", { enum: PLATFORMS }).notNull(),
+    chatId: text("chat_id").notNull(),
+    // The tool call that created this draft. A retried chat-turn step finds this row and reuses the
+    // Gmail draft instead of writing a duplicate into the mailbox
+    toolCallId: text("tool_call_id").notNull(),
+    // The run and turn that created the draft: sending from this same turn is refused
+    turnId: text("turn_id").notNull(),
+    recipients: jsonb("recipients").$type<string[]>().notNull(),
+    cc: jsonb("cc").$type<string[]>().notNull(),
+    bcc: jsonb("bcc").$type<string[]>().notNull(),
+    subject: text("subject").notNull(),
+    threadId: text("thread_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("pending_sends_tool_call_idx").on(table.toolCallId),
+    index("pending_sends_chat_idx").on(
+      table.clerkUserId,
+      table.platform,
+      table.chatId,
+      table.expiresAt
+    ),
+  ]
+);
+
+export type PendingSend = typeof pendingSends.$inferSelect;
+export type NewPendingSend = typeof pendingSends.$inferInsert;
