@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/node";
 import { Hono } from "hono";
+import { hasProPlan, upgradeUrl } from "./billing.js";
 import {
   enqueueChatMessage,
   gateInbound,
@@ -7,12 +8,68 @@ import {
   secretMatches,
   upgradeMessage,
 } from "./channel-gate.js";
+import { findChannelLink } from "./db/channel-links.js";
+import { getUserEmail } from "./clerk-user.js";
 import { UNSUPPORTED_MESSAGE_TEXT } from "./inngest/channel-messages.js";
 import { parseTelegramMessage, type TelegramUpdate } from "./inngest/inbound.js";
 import { log } from "./log.js";
 import { sendMessage } from "./inngest/telegram-api.js";
+import {
+  HELP_TEXT,
+  parseTelegramCommand,
+  WHOAMI_NOT_LINKED_TEXT,
+  whoamiText,
+  type ParsedTelegramCommand,
+} from "./telegram-commands.js";
 
 const SECRET_HEADER = "x-telegram-bot-api-secret-token";
+
+// Commands are answered in the webhook: they skip the gate, the inbox and Inngest. Unknown
+// commands return null and take the normal message path
+const commandReply = async (
+  command: ParsedTelegramCommand,
+  externalUserId: string
+): Promise<string | null> => {
+  switch (command.name) {
+    case "help":
+      return HELP_TEXT;
+    case "whoami": {
+      const link = await findChannelLink("telegram", externalUserId);
+      if (!link) return WHOAMI_NOT_LINKED_TEXT;
+      Sentry.setUser({ id: link.clerkUserId });
+      let email: string | null = null;
+      try {
+        email = await getUserEmail(link.clerkUserId);
+      } catch (error) {
+        // The email is a nicety: /whoami still answers with the plan and linked date
+        Sentry.captureException(error);
+        log.warn("User email lookup failed", {
+          "channel.platform": "telegram",
+          "channel.command": command.name,
+        });
+      }
+      let pro: boolean | null = null;
+      try {
+        pro = await hasProPlan(link.clerkUserId);
+      } catch (error) {
+        Sentry.captureException(error);
+        log.warn("Plan lookup failed", {
+          "channel.platform": "telegram",
+          "channel.command": command.name,
+        });
+      }
+      return whoamiText({
+        email,
+        pro,
+        linkedAt: link.linkedAt,
+        // Only needed without Pro; avoids requiring the publishable key just to answer
+        upgradeUrl: pro === false ? upgradeUrl() : "",
+      });
+    }
+    default:
+      return null;
+  }
+};
 
 // Telegram's webhook lands here first, and only private-chat messages that pass the channel gate
 // are queued for the agent
@@ -28,6 +85,19 @@ export const telegramWebhook = new Hono().post("/", async (c) => {
   // Private chats only; other updates are acknowledged so Telegram doesn't redeliver them
   if (!message?.from || message.chat.type !== "private") {
     return c.body(null, 200);
+  }
+
+  // Commands skip the gate and the agent, so they work whether or not the user is linked or on Pro
+  const command = parseTelegramCommand(message.text);
+  if (command) {
+    const reply = await commandReply(command, String(message.from.id));
+    if (reply !== null) {
+      log.info("Channel command handled", {
+        "channel.platform": "telegram",
+        "channel.command": command.name,
+      });
+      return c.json({ method: "sendMessage", chat_id: message.chat.id, text: reply });
+    }
   }
 
   let gate;

@@ -1,10 +1,11 @@
-import { and, asc, eq, inArray, isNotNull, isNull, lt, ne, notExists, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, ne, notExists, or, sql } from "drizzle-orm";
 import type { ModelMessage } from "ai";
 import { db } from "./index.js";
 import {
   chatInbox,
   chatLocks,
   chatTranscripts,
+  chatWorkingMessages,
   type ChatInboxRow,
   type InboxPart,
   type Platform,
@@ -12,6 +13,8 @@ import {
 
 type Conversation = { platform: Platform; clerkUserId: string };
 
+// True when the message was new. A redelivery keeps the original row, so callers can tell the two
+// apart (the webhook only shows a working message for a message it actually queued)
 export const insertInbox = async (row: {
   platform: Platform;
   externalMessageId: string;
@@ -19,7 +22,12 @@ export const insertInbox = async (row: {
   chatId: string;
   parts: InboxPart[];
 }) => {
-  await db.insert(chatInbox).values(row).onConflictDoNothing();
+  const inserted = await db
+    .insert(chatInbox)
+    .values(row)
+    .onConflictDoNothing()
+    .returning({ id: chatInbox.id });
+  return inserted.length > 0;
 };
 
 const pending = ({ platform, clerkUserId }: Conversation) =>
@@ -186,6 +194,32 @@ export const strandedConversations = async (olderThanMinutes: number) => {
   return rows;
 };
 
+// The latest messages the assistant has answered, for the dashboard's activity feed
+export const listRecentInbox = async (clerkUserId: string, limit = 5) =>
+  db
+    .select({
+      id: chatInbox.id,
+      platform: chatInbox.platform,
+      parts: chatInbox.parts,
+      receivedAt: chatInbox.receivedAt,
+    })
+    .from(chatInbox)
+    .where(and(eq(chatInbox.clerkUserId, clerkUserId), isNotNull(chatInbox.processedAt)))
+    .orderBy(desc(chatInbox.receivedAt))
+    .limit(limit);
+
+// Where a linked account last talked to the assistant. Used to backfill `chat_id` for links that
+// predate the column, so dashboard-created reminders know where to go
+export const latestChatId = async (clerkUserId: string, platform: Platform) => {
+  const rows = await db
+    .select({ chatId: chatInbox.chatId })
+    .from(chatInbox)
+    .where(and(eq(chatInbox.clerkUserId, clerkUserId), eq(chatInbox.platform, platform)))
+    .orderBy(desc(chatInbox.receivedAt))
+    .limit(1);
+  return rows[0]?.chatId ?? null;
+};
+
 // Processed messages are only kept for dedupe of late redeliveries
 export const deleteOldProcessed = async (olderThanHours: number) => {
   await db
@@ -193,4 +227,48 @@ export const deleteOldProcessed = async (olderThanHours: number) => {
     .where(
       lt(chatInbox.processedAt, sql`now() - ${olderThanHours} * interval '1 hour'`)
     );
+};
+
+// The message shown while the agent works. The row is what lets the webhook, the turn and the
+// failure handler delete the same message exactly once, however often their steps are replayed
+export const findWorkingMessage = async (platform: Platform, chatId: string) => {
+  const row = await db.query.chatWorkingMessages.findFirst({
+    where: and(
+      eq(chatWorkingMessages.platform, platform),
+      eq(chatWorkingMessages.chatId, chatId)
+    ),
+  });
+  return row?.messageId;
+};
+
+// False when another caller recorded one first: the message just sent is a duplicate
+export const saveWorkingMessage = async ({
+  platform,
+  chatId,
+  messageId,
+}: {
+  platform: Platform;
+  chatId: string;
+  messageId: string;
+}) => {
+  const rows = await db
+    .insert(chatWorkingMessages)
+    .values({ platform, chatId, messageId })
+    .onConflictDoNothing()
+    .returning({ messageId: chatWorkingMessages.messageId });
+  return rows.length > 0;
+};
+
+// Takes the row so only one caller deletes the message
+export const takeWorkingMessage = async (platform: Platform, chatId: string) => {
+  const rows = await db
+    .delete(chatWorkingMessages)
+    .where(
+      and(
+        eq(chatWorkingMessages.platform, platform),
+        eq(chatWorkingMessages.chatId, chatId)
+      )
+    )
+    .returning({ messageId: chatWorkingMessages.messageId });
+  return rows[0]?.messageId;
 };

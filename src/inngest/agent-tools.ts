@@ -1,5 +1,11 @@
 import type { Tool } from "ai";
 import { executeComputerTool, computerToolSchemas, isComputerTool, ToolInputError, type ToolOutput, type ComputerContext } from "./computer-tools.js";
+import {
+  executeReminderTool,
+  isReminderTool,
+  reminderToolSchemas,
+  type ReminderContext,
+} from "./reminder-tools.js";
 import { webTools } from "./web-tools.js";
 
 export { ToolInputError };
@@ -15,12 +21,14 @@ const withoutExecute = ([name, { execute, toModelOutput, ...definition }]: [stri
 export const modelTools = {
   ...(Object.fromEntries(Object.entries(webTools).map(withoutExecute)) as Record<string, Tool>),
   ...computerToolSchemas,
+  ...reminderToolSchemas,
 };
 
 export const isWebTool = (name: string): name is keyof typeof webTools =>
   Object.hasOwn(webTools, name);
 
-export { isComputerTool };
+export { isComputerTool, isReminderTool, executeReminderTool };
+export type { ReminderContext };
 
 const isAsyncIterable = (value: unknown): value is AsyncIterable<unknown> =>
   typeof value === "object" && value !== null && Symbol.asyncIterator in value;

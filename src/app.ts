@@ -1,6 +1,8 @@
 import * as Sentry from '@sentry/node'
+import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono } from 'hono'
 import { serve } from 'inngest/hono'
+import { dashboard } from './dashboard/index.js'
 import { functions, inngest } from './inngest/index.js'
 import { linqWebhook } from './linq-webhook.js'
 import { requirePlatform } from './platforms.js'
@@ -21,6 +23,14 @@ app.use(async (_c, next) => {
 app.get('/', (c) => {
   return c.text('Hello Vercel!')
 })
+
+// The dashboard is a Vite build in public/dashboard. Its assets are hashed and can be cached
+// forever; the app itself is client-routed, so only its index page needs the server
+app.get('/dashboard', (c) => c.redirect('/dashboard/'))
+app.use('/dashboard/*', serveStatic({ root: './public' }))
+
+// Web dashboard API and sign-in: JSON only, authenticated with the app's own signed cookie
+app.route('/api/dashboard', dashboard)
 
 app.route('/telegram/webhook', telegramWebhook)
 // Linq (iMessage) is switched off unless LINQ_ENABLED=true; see docs/linq.md

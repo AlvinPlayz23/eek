@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/node";
 import { NonRetriableError } from "inngest";
+import { fetchUserInfo, pollToken, startDeviceAuthorization } from "../clerk-oauth.js";
 import { findChannelLink } from "../db/channel-links.js";
 import { db } from "../db/index.js";
 import { channelIdentifiers } from "../db/schema.js";
@@ -8,62 +9,6 @@ import { sendChannelText } from "./channels.js";
 import { inngest } from "./client.js";
 import { accountLinkRequested } from "./events.js";
 import { reportFailure } from "./failure.js";
-
-type DeviceAuthorization = {
-  device_code: string;
-  user_code: string;
-  verification_uri: string;
-  verification_uri_complete: string;
-  expires_in: number;
-  interval: number;
-};
-
-type TokenResponse = { access_token: string } | { error: string; error_description?: string };
-
-// Confidential OAuth app with Device Authorization Grant enabled, created with the Clerk CLI
-const oauthRequest = (path: string, body: Record<string, string>) =>
-  fetch(`${process.env.CLERK_OAUTH_ISSUER}${path}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${btoa(`${process.env.CLERK_OAUTH_CLIENT_ID}:${process.env.CLERK_OAUTH_CLIENT_SECRET}`)}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams(body),
-  });
-
-const startDeviceAuthorization = async () => {
-  const res = await oauthRequest("/oauth/device_authorization", {
-    client_id: process.env.CLERK_OAUTH_CLIENT_ID!,
-    scope: "openid email",
-  });
-  if (!res.ok) {
-    throw new Error(`Device authorization failed: ${res.status} ${await res.text()}`);
-  }
-  return (await res.json()) as DeviceAuthorization;
-};
-
-const pollToken = async (deviceCode: string) => {
-  const res = await oauthRequest("/oauth/token", {
-    grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-    device_code: deviceCode,
-  });
-  // Pending, denied and expired requests come back as 400s with an OAuth error code
-  if (!res.ok && res.status !== 400) {
-    throw new Error(`Token request failed: ${res.status} ${await res.text()}`);
-  }
-  return (await res.json()) as TokenResponse;
-};
-
-const fetchUserInfo = async (accessToken: string) => {
-  const res = await fetch(`${process.env.CLERK_OAUTH_ISSUER}/oauth/userinfo`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  if (!res.ok) {
-    throw new Error(`userinfo failed: ${res.status} ${await res.text()}`);
-  }
-  // `sub` is the Clerk user id
-  return (await res.json()) as { sub: string; email?: string };
-};
 
 type PollResult =
   | { status: "pending" }
@@ -126,7 +71,7 @@ export const linkChannelAccount = inngest.createFunction(
           // The unique index keeps an existing link if two flows for the same user both finish
           await db
             .insert(channelIdentifiers)
-            .values({ platform, externalUserId, clerkUserId: user.sub })
+            .values({ platform, externalUserId, clerkUserId: user.sub, chatId, lastSeenAt: new Date() })
             .onConflictDoNothing();
           const link = await findChannelLink(platform, externalUserId);
           // The platform handle isn't logged (a Linq handle is a phone number or email): the

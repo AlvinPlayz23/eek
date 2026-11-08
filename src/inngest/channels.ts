@@ -1,3 +1,8 @@
+import {
+  findWorkingMessage,
+  saveWorkingMessage,
+  takeWorkingMessage,
+} from "../db/chat.js";
 import type { Platform } from "../db/schema.js";
 import { log } from "../log.js";
 import { splitMessage } from "./channel-messages.js";
@@ -5,6 +10,9 @@ import * as linq from "./linq-api.js";
 import * as telegram from "./telegram-api.js";
 
 export type OutgoingFile = { data: Uint8Array; filename: string; mediaType: string };
+
+// The message Telegram shows while the agent works. It is deleted before the reply goes out
+export const WORKING_TEXT = "💭 Thinking…";
 
 // What the agent needs from a chat platform. Chat ids travel as strings so every platform fits the
 // same event and table columns. Adding a platform to PLATFORMS makes CHANNELS fail to compile until
@@ -16,8 +24,12 @@ export type Channel = {
   sendText: (chatId: string, text: string) => Promise<void>;
   sendFile: (chatId: string, file: OutgoingFile, caption?: string) => Promise<void>;
   downloadAttachment: (attachmentId: string) => Promise<Uint8Array>;
-  // The assistant started or finished working on a turn: read receipt and typing bubble
+  // The assistant started or finished working on a turn: read receipt and typing bubble, or a
+  // message that is deleted again. Must never throw: it is cosmetic and must not fail a turn
   setWorking: (chatId: string, working: boolean) => Promise<void>;
+  // Whether setWorking(true) posts a message the user sees (Telegram) rather than only a native
+  // typing bubble (iMessage). The webhook shows it as soon as a message is queued
+  workingMessage: boolean;
 };
 
 // Telegram rejects messages over 4096 characters
@@ -39,7 +51,41 @@ export const CHANNELS: Record<Platform, Channel> = {
       await telegram.sendFile(Number(chatId), file, caption);
     },
     downloadAttachment: telegram.downloadFile,
-    setWorking: async () => {},
+    workingMessage: true,
+    setWorking: async (chatId, working) => {
+      const id = Number(chatId);
+      try {
+        if (working) {
+          // Already showing: every model call renews the state, but only the first one sends
+          if (await findWorkingMessage("telegram", chatId)) return;
+          const messageId = await telegram.sendMessage(id, WORKING_TEXT, {
+            disableNotification: true,
+          });
+          try {
+            const saved = await saveWorkingMessage({
+              platform: "telegram",
+              chatId,
+              messageId: String(messageId),
+            });
+            // Another caller recorded one first: the message just sent is a duplicate
+            if (!saved) await telegram.deleteMessage(id, messageId);
+          } catch (error) {
+            // Never leave a message behind that no row can delete
+            await telegram.deleteMessage(id, messageId).catch(() => {});
+            throw error;
+          }
+        } else {
+          const messageId = await takeWorkingMessage("telegram", chatId);
+          if (messageId) await telegram.deleteMessage(id, Number(messageId));
+        }
+      } catch (error) {
+        // Cosmetic: a failed working message must not fail the turn
+        log.warn("Working message failed", {
+          "channel.platform": "telegram",
+          "error.name": error instanceof Error ? error.name : "unknown",
+        });
+      }
+    },
   },
   linq: {
     platformName: "iMessage",
@@ -60,6 +106,9 @@ export const CHANNELS: Record<Platform, Channel> = {
       await linq.sendFile(chatId, file, caption);
     },
     downloadAttachment: linq.downloadAttachment,
+    // Linq's delete only removes the message from Linq's records, not from the recipient's thread,
+    // so iMessage keeps the native typing bubble instead of a message that would have to stay
+    workingMessage: false,
     setWorking: async (chatId, working) => {
       try {
         if (working) await Promise.all([linq.markRead(chatId), linq.startTyping(chatId)]);

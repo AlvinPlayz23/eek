@@ -19,11 +19,20 @@ mock.module("./inngest/client.js", {
 mock.module("./billing.js", {
   exports: { hasProPlan: async () => pro, upgradeUrl: () => "https://upgrade.example" },
 });
-// The welcome is sent through the Bot API; capture it instead of calling Telegram
+// The welcome and working messages are sent through the Bot API; capture them instead of calling
+// Telegram. Deleting a working message is captured too
 const texts: string[] = [];
+const deleted: number[] = [];
+let nextMessageId = 1;
 mock.module("./inngest/telegram-api.js", {
   exports: {
-    sendMessage: async (_chatId: number, text: string) => (texts.push(text), 1),
+    sendMessage: async (_chatId: number, text: string) => {
+      texts.push(text);
+      return nextMessageId++;
+    },
+    deleteMessage: async (_chatId: number, messageId: number) => {
+      deleted.push(messageId);
+    },
     sendFile: async () => 1,
     downloadFile: async () => new Uint8Array(),
     MAX_DOWNLOAD_BYTES: 20 * 1024 * 1024,
@@ -33,8 +42,9 @@ mock.module("./inngest/telegram-api.js", {
 
 process.env.TELEGRAM_WEBHOOK_SECRET = "s3cret";
 const { db } = await import("./db/index.js");
-const { channelIdentifiers, chatInbox } = await import("./db/schema.js");
+const { channelIdentifiers, chatInbox, chatWorkingMessages } = await import("./db/schema.js");
 const { telegramWebhook } = await import("./telegram-webhook.js");
+const { WORKING_TEXT } = await import("./inngest/channels.js");
 
 const userId = `tg-${Date.now()}`;
 const post = (body: unknown, secret = "s3cret") =>
@@ -50,15 +60,23 @@ const update = (extra: Record<string, unknown>, messageId = 7) => ({
 const externalUserId = String(Number(userId.slice(3)) % 1e9);
 
 describe("telegram webhook", { skip: !process.env.DATABASE_URL }, () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     sent.length = 0;
     texts.length = 0;
+    deleted.length = 0;
+    nextMessageId = 1;
     sendFails = false;
     pro = true;
+    await db
+      .delete(chatWorkingMessages)
+      .where(sql`platform = 'telegram' and chat_id = '4242'`);
   });
   after(async () => {
     await db.delete(chatInbox).where(sql`clerk_user_id = 'clerk-tg-test'`);
     await db.delete(channelIdentifiers).where(sql`external_user_id = ${externalUserId}`);
+    await db
+      .delete(chatWorkingMessages)
+      .where(sql`platform = 'telegram' and chat_id = '4242'`);
     await (db as unknown as { $client: { end: () => Promise<void> } }).$client.end();
   });
 
@@ -87,6 +105,14 @@ describe("telegram webhook", { skip: !process.env.DATABASE_URL }, () => {
       const rows = await db.select().from(chatInbox).where(sql`clerk_user_id = 'clerk-tg-test'`);
       assert.equal(rows.length, 1);
       assert.deepEqual(rows[0]!.parts, [{ type: "text", text: "hello" }]);
+      // A silent working message is shown as soon as the message is queued
+      assert.deepEqual(texts, [WORKING_TEXT]);
+      const working = await db
+        .select()
+        .from(chatWorkingMessages)
+        .where(sql`platform = 'telegram' and chat_id = '4242'`);
+      assert.equal(working.length, 1);
+      assert.equal(working[0]!.messageId, "1");
     });
 
     test("a failed announcement answers 502 and the redelivery does not duplicate the row", async () => {
@@ -97,6 +123,8 @@ describe("telegram webhook", { skip: !process.env.DATABASE_URL }, () => {
       const rows = await db.select().from(chatInbox).where(sql`external_message_id = '4242:8'`);
       assert.equal(rows.length, 1);
       assert.equal(sent.length, 1);
+      // The failed attempt never queued the working message; the redelivery is not a new message
+      assert.deepEqual(texts, []);
     });
 
     test("a sticker gets the unsupported reply in the response", async () => {
@@ -121,14 +149,17 @@ describe("telegram webhook", { skip: !process.env.DATABASE_URL }, () => {
       pro = true;
       const first = await post(update({ text: "hello again" }, 21));
       assert.equal(first.status, 200);
-      assert.deepEqual(texts, ["You have upgraded to Pro. You are now free to ask me anything."]);
+      assert.deepEqual(texts, [
+        "You have upgraded to Pro. You are now free to ask me anything.",
+        WORKING_TEXT,
+      ]);
       assert.equal(sent.length, 1);
       assert.equal(sent[0]!.name, "chat/message.received");
       const second = await post(update({ text: "and again" }, 22));
       assert.equal(second.status, 200);
       assert.equal(sent.length, 2);
-      // Only once
-      assert.equal(texts.length, 1);
+      // The welcome and the working message are each sent only once
+      assert.equal(texts.length, 2);
     });
 
     test("a photo is queued with a file part and an attachment note", async () => {

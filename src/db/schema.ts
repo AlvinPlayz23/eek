@@ -1,6 +1,7 @@
 import type { ModelMessage } from "ai";
 import {
   index,
+  integer,
   jsonb,
   pgTable,
   primaryKey,
@@ -14,6 +15,9 @@ import {
 export const PLATFORMS = ["telegram", "linq"] as const;
 export type Platform = (typeof PLATFORMS)[number];
 
+export const REMINDER_STATUSES = ["pending", "paused", "sent", "canceled", "failed"] as const;
+export type ReminderStatus = (typeof REMINDER_STATUSES)[number];
+
 // Links a user's identity on a chat platform to their Clerk user, so inbound messages
 // can be scoped to (and rejected for anyone but) a linked account
 export const channelIdentifiers = pgTable(
@@ -25,6 +29,10 @@ export const channelIdentifiers = pgTable(
     // phone number or an Apple ID email) for Linq
     externalUserId: text("external_user_id").notNull(),
     clerkUserId: text("clerk_user_id").notNull(),
+    // Where the assistant can reach this user on the platform, so the dashboard can show reminders
+    // to the same conversation. Updated whenever a gated message arrives
+    chatId: text("chat_id"),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
     linkedAt: timestamp("linked_at", { withTimezone: true }).notNull().defaultNow(),
     // When the user was last told to upgrade. Cleared once they are on Pro, which is when the
     // one-time welcome is sent (see channel-gate.ts)
@@ -41,6 +49,16 @@ export const channelIdentifiers = pgTable(
 export type ChannelIdentifier = typeof channelIdentifiers.$inferSelect;
 export type NewChannelIdentifier = typeof channelIdentifiers.$inferInsert;
 
+// Preferences that follow the user across chat platforms. The timezone is what reminders are
+// scheduled in; it is null until the agent asks for it
+export const userProfiles = pgTable("user_profiles", {
+  clerkUserId: text("clerk_user_id").primaryKey(),
+  timezone: text("timezone"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type UserProfile = typeof userProfiles.$inferSelect;
 
 // Parts of a user message as the model reads it: text, and files as platform-reserved URLs that
 // are resolved to bytes when the model is called (see channel-messages.ts)
@@ -101,5 +119,53 @@ export const chatLocks = pgTable(
   },
   (table) => [primaryKey({ columns: [table.platform, table.clerkUserId] })]
 );
+
+// The "working…" message a platform can show while the agent runs. Telegram deletes it before the
+// reply; platforms that can't unsend messages use their own native indicator instead. One per chat
+export const chatWorkingMessages = pgTable(
+  "chat_working_messages",
+  {
+    platform: text("platform", { enum: PLATFORMS }).notNull(),
+    chatId: text("chat_id").notNull(),
+    messageId: text("message_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.platform, table.chatId] })]
+);
+
+// One row is one reminder, or one recurring series. `dueAt` is the next occurrence; delivery
+// advances it for recurring reminders instead of inserting a row per occurrence. `timezone` is
+// captured at creation so changing the profile does not move an existing schedule
+export const reminders = pgTable(
+  "reminders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clerkUserId: text("clerk_user_id").notNull(),
+    platform: text("platform", { enum: PLATFORMS }).notNull(),
+    chatId: text("chat_id").notNull(),
+    // The tool call that created this row. A retried chat-turn step reuses the row and the
+    // idempotent reminder event instead of creating a duplicate
+    dedupeKey: text("dedupe_key"),
+    text: text("text").notNull(),
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+    // An RFC 5545 rule with its DTSTART; null for a one-shot
+    rrule: text("rrule"),
+    timezone: text("timezone").notNull(),
+    status: text("status", { enum: REMINDER_STATUSES }).notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    // A short lease so an interrupted delivery is retried, but not by two runs at once
+    claimedUntil: timestamp("claimed_until", { withTimezone: true }),
+    lastSentAt: timestamp("last_sent_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("reminders_dedupe_key_idx").on(table.dedupeKey),
+    index("reminders_due_idx").on(table.status, table.dueAt),
+    index("reminders_user_idx").on(table.clerkUserId, table.status, table.dueAt),
+  ]
+);
+
+export type Reminder = typeof reminders.$inferSelect;
+export type NewReminder = typeof reminders.$inferInsert;
 
 export type ChatInboxRow = typeof chatInbox.$inferSelect;

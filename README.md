@@ -9,22 +9,30 @@ account, and Pro subscribers talk to an agent that can browse the web and use it
 
 ```
 Telegram (and Linq, off) ──webhook──▶ Hono (Vercel) ──▶ Postgres inbox ──event──▶ Inngest ──▶ /api/inngest
-                              verify + gate                                           chat-turn, link, sweeper
+                              verify + gate                                           chat-turn, link, sweeper, reminders
 ```
 
 - **Hono** (`src/app.ts`) takes the platforms' webhooks, verifies them and runs the channel gate
   (`src/channel-gate.ts`). A message from a linked Pro user is written to `chat_inbox` and announced
   to Inngest. Unlinked users get a sign-in link, and linked users without Pro get an upgrade link.
+- **Dashboard** (`web/`) is a React SPA built into `public/dashboard` and served by Hono at
+  `/dashboard/`. It uses the same Clerk device flow as chat linking, but keeps the browser session
+  in the app's own signed cookie.
 - **Inngest** runs the work as functions in `src/inngest/`, served at `/api/inngest`:
   - `chat-turn`: one agent turn at a time per user. Every model call and tool call is a durable
     step. Long shell commands run in the background of the Daytona sandbox and are checked every
     30 seconds while the run sleeps, so no single request waits on them.
   - `link-channel-account`: Clerk device-flow sign-in for new users.
   - `sweep-inbox`: every 15 minutes, restarts conversations whose messages nobody is working on.
-- **Postgres** (Neon, Drizzle) holds channel links, the inbox, per-user locks and conversation
-  transcripts. Change the schema in `src/db/schema.ts` and apply it with `npm run db:push`.
+  - `deliver-reminder`: sends one reminder when its delayed `reminder/due` event fires, then
+    schedules the next occurrence of a recurring reminder.
+  - `sweep-reminders`: hourly fallback that delivers overdue reminders if a delayed event was
+    lost or a recurring reminder's next event was not scheduled.
+- **Postgres** (Neon, Drizzle) holds channel links, the inbox, per-user locks, conversation
+  transcripts, profiles and reminders. Change the schema in `src/db/schema.ts` and apply it with
+  `pnpm run db:push`.
 - **Vercel** hosts it: `src/index.ts` default-exports the Hono app. `src/local.ts` is the plain
-  Node server used by `npm run dev` and `npm start`.
+  Node server used by `pnpm run dev` and `pnpm start`.
 
 ## Run it locally
 
@@ -34,7 +42,7 @@ for the services you want to exercise.
 1. Install and create your env file:
 
    ```
-   npm install
+   pnpm install
    cp .env.example .env      # on Windows PowerShell: Copy-Item .env.example .env
    ```
 
@@ -47,24 +55,28 @@ for the services you want to exercise.
 3. Create the tables:
 
    ```
-   npm run db:push
+   pnpm run db:push
    ```
 
 4. Start the app and the Inngest dev server in two terminals:
 
    ```
-   npm run dev            # the app on http://localhost:3000
-   npm run inngest:dev    # the Inngest dev server and its UI on http://localhost:8288
+   pnpm run dev            # the app on http://localhost:3000
+   pnpm run inngest:dev    # the Inngest dev server and its UI on http://localhost:8288
    ```
 
    The dev server finds the app at `http://localhost:3000/api/inngest`. Open
    http://localhost:8288 to see the registered functions, events and step-by-step runs.
 
+   The app serves the built dashboard at http://localhost:3000/dashboard/. For live frontend
+   work, run `pnpm dev:web` in a third terminal and open http://localhost:5173/dashboard/; Vite
+   proxies `/api` to the app on port 3000.
+
 5. Check it:
-   - `curl localhost:3000/api/inngest` should report `"mode":"dev"` and `"function_count":6`
-     (three functions plus their failure handlers).
+   - `curl localhost:3000/api/inngest` should report `"mode":"dev"` and `"function_count":10`
+     (five functions plus their failure handlers).
    - In the Inngest UI, open Functions and invoke or inspect runs.
-   - `npm test` runs the unit tests. The database tests need `DATABASE_URL` pointing at a database
+   - `pnpm test` runs the unit tests. The database tests need `DATABASE_URL` pointing at a database
      with the schema pushed, and are skipped without it.
 
 ### Talking to a real chat from your machine
@@ -88,7 +100,7 @@ only one webhook at a time.
 ## Set it up in the cloud
 
 1. **Database.** Create a Neon project and put its pooled connection string in `DATABASE_URL` and
-   its direct one in `DATABASE_URL_UNPOOLED`. Run `npm run db:push` once against it from your
+   its direct one in `DATABASE_URL_UNPOOLED`. Run `pnpm run db:push` once against it from your
    machine before the first deploy.
 
 2. **Third-party services.** Create the accounts and keys listed in `.env.example`:
@@ -114,8 +126,8 @@ only one webhook at a time.
      deploy. Without the integration, create an event key and copy the signing key from the Inngest
      dashboard, add both in Vercel, and sync the app from Inngest's Apps page using
      `https://<your-domain>/api/inngest`.
-   - After a deploy, the app should appear under Apps with all six functions, including the
-     `sweep-inbox` cron.
+   - After a deploy, the app should appear under Apps with all ten functions, including the
+     `sweep-inbox` and `sweep-reminders` crons.
 
 5. **Webhooks.** Point the platforms at your production domain, using the same secrets as your
    Vercel variables:

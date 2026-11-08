@@ -1,9 +1,15 @@
 import { timingSafeEqual } from "node:crypto";
 import * as Sentry from "@sentry/node";
 import { hasProPlan, upgradeUrl } from "./billing.js";
-import { claimProWelcome, findChannelLink, markUpgradePrompted } from "./db/channel-links.js";
+import {
+  claimProWelcome,
+  findChannelLink,
+  markUpgradePrompted,
+  touchChannel,
+} from "./db/channel-links.js";
 import { insertInbox } from "./db/chat.js";
 import type { InboxPart, Platform } from "./db/schema.js";
+import { CHANNELS } from "./inngest/channels.js";
 import { inngest } from "./inngest/client.js";
 import { accountLinkRequested, chatMessageReceived } from "./inngest/events.js";
 import { log } from "./log.js";
@@ -63,6 +69,9 @@ export const gateInbound = async ({
     await markUpgradePrompted(platform, externalUserId);
     return { status: "upgrade" };
   }
+  // Remember where to reach this user, so the dashboard can create reminders that are delivered
+  // to the same chat
+  await touchChannel(platform, externalUserId, chatId);
   return {
     status: "allowed",
     clerkUserId: link.clerkUserId,
@@ -87,13 +96,26 @@ export const enqueueChatMessage = async ({
   parts: InboxPart[];
 }) => {
   try {
-    await insertInbox({ platform, externalMessageId, clerkUserId, chatId, parts });
+    const inserted = await insertInbox({
+      platform,
+      externalMessageId,
+      clerkUserId,
+      chatId,
+      parts,
+    });
     await inngest.send(
       chatMessageReceived.create(
         { platform, clerkUserId, chatId },
         { id: `${platform}-${externalMessageId}` }
       )
     );
+    // Show the platform's "working…" message as soon as the message is queued instead of waiting
+    // for the run to start. Only a newly queued message shows one, so a redelivery after the reply
+    // can't leave an orphan behind
+    if (inserted && CHANNELS[platform].workingMessage) {
+      // Cosmetic: a platform failure must not make the webhook answer non-2xx
+      await CHANNELS[platform].setWorking(chatId, true).catch(() => {});
+    }
     return true;
   } catch (error) {
     Sentry.captureException(error);

@@ -12,6 +12,17 @@ export const chatMessageReceived = eventType("chat/message.received", {
   }),
 });
 
+// A reminder occurrence is due. The event is sent with `ts` set to the occurrence time, so Inngest
+// holds it until then instead of waking a function every minute to poll for due reminders
+export const reminderDue = eventType("reminder/due", {
+  schema: z.object({
+    reminderId: z.string(),
+    scheduledFor: z
+      .string()
+      .refine((value) => !Number.isNaN(Date.parse(value)), "scheduledFor must be a date"),
+  }),
+});
+
 // An unlinked user wrote to the assistant
 export const accountLinkRequested = eventType("chat/account.link.requested", {
   schema: z.object({

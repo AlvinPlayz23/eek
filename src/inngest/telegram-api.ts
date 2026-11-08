@@ -3,6 +3,19 @@
 const apiUrl = (method: string) =>
   `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`;
 
+// Telegram answers failures with an HTTP status and a description; callers that can recover (such
+// as deleting a message that is already gone) need the status, not just the message
+class TelegramApiError extends Error {
+  constructor(
+    method: string,
+    readonly status: number,
+    readonly description: string
+  ) {
+    super(`${method} failed: ${status} ${description}`);
+    this.name = "TelegramApiError";
+  }
+}
+
 const callApi = async <T>(method: string, body: FormData | Record<string, unknown>) => {
   const res = await fetch(
     apiUrl(method),
@@ -15,18 +28,41 @@ const callApi = async <T>(method: string, body: FormData | Record<string, unknow
         }
   );
   if (!res.ok) {
-    throw new Error(`${method} failed: ${res.status} ${await res.text()}`);
+    throw new TelegramApiError(method, res.status, await res.text());
   }
   const { result } = (await res.json()) as { result: T };
   return result;
 };
 
-export const sendMessage = async (chatId: number, text: string) => {
+export const sendMessage = async (
+  chatId: number,
+  text: string,
+  options?: { disableNotification?: boolean }
+) => {
   const { message_id } = await callApi<{ message_id: number }>("sendMessage", {
     chat_id: chatId,
     text,
+    ...(options?.disableNotification ? { disable_notification: true } : {}),
   });
   return message_id;
+};
+
+// Deletes a message the bot sent. A 400 means it is already gone (the user deleted it, or it is
+// older than Telegram's 48-hour window), which is as good as deleted
+export const deleteMessage = async (chatId: number, messageId: number) => {
+  try {
+    await callApi<boolean>("deleteMessage", { chat_id: chatId, message_id: messageId });
+  } catch (error) {
+    if (error instanceof TelegramApiError && error.status === 400) return;
+    throw error;
+  }
+};
+
+// Sets the command menu Telegram shows when the user types "/"
+export const setMyCommands = async (
+  commands: { command: string; description: string }[]
+) => {
+  await callApi<boolean>("setMyCommands", { commands });
 };
 
 // Bots can download files up to 20 MB and upload documents up to 50 MB, photos up to 10 MB

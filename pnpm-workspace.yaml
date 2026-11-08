@@ -1,4 +1,9 @@
+packages:
+  - web
+
 onlyBuiltDependencies:
   - esbuild
+  - inngest-cli
 allowBuilds:
   esbuild: true
+  inngest-cli: true

@@ -5,6 +5,7 @@ import * as ai from "ai";
 // The services around the turn are replaced: the store, the chat platform and the model. What runs
 // for real is the Inngest function: its steps, the lock handoff and the tool loop
 const calls = {
+  events: [] as string[],
   sent: [] as string[],
   saved: [] as unknown[][],
   processed: [] as string[][],
@@ -36,10 +37,16 @@ mock.module("../db/chat.js", {
 const channel = {
   platformName: "Telegram",
   maxSendBytes: 1,
-  sendText: async (_chat: string, text: string) => void calls.sent.push(text),
+  sendText: async (_chat: string, text: string) => {
+    calls.sent.push(text);
+    calls.events.push(`text:${text}`);
+  },
   sendFile: async () => {},
   downloadAttachment: async () => new Uint8Array(),
-  setWorking: async () => {},
+  workingMessage: true,
+  setWorking: async (_chat: string, working: boolean) => {
+    calls.events.push(working ? "working:on" : "working:off");
+  },
 };
 mock.module("./channels.js", { exports: { CHANNELS: { telegram: channel, linq: channel }, sendChannelText: async () => {} } });
 mock.module("./model.js", { exports: { chatModel: () => ({}), modelId: () => "test-model" } });
@@ -79,7 +86,7 @@ const assistant = (content: unknown, text = "") => () => ({
 });
 
 beforeEach(() => {
-  Object.assign(calls, { sent: [], saved: [], processed: [], prompts: [], failed: [] });
+  Object.assign(calls, { events: [], sent: [], saved: [], processed: [], prompts: [], failed: [] });
   lockFree = true;
   inbox = [row("r1", "hello")];
   modelReplies = [];
@@ -102,6 +109,8 @@ describe("chat-turn", () => {
     assert.equal(error, undefined);
     assert.deepEqual(result, { status: "done", turns: 1 });
     assert.deepEqual(calls.sent, ["Hi there"]);
+    // The working message is taken down before the reply goes out
+    assert.deepEqual(calls.events, ["working:on", "working:off", "text:Hi there"]);
     assert.deepEqual(calls.processed, [["r1"]]);
     const stored = calls.saved[0]!;
     assert.equal(stored.length, 3);

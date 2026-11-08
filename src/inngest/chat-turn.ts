@@ -13,6 +13,7 @@ import {
   renewLock,
   saveTranscript,
 } from "../db/chat.js";
+import { loadProfile } from "../db/profiles.js";
 import type { Platform } from "../db/schema.js";
 import { log } from "../log.js";
 import {
@@ -26,8 +27,10 @@ import {
 } from "./agent-messages.js";
 import {
   executeComputerTool,
+  executeReminderTool,
   executeWebTool,
   isComputerTool,
+  isReminderTool,
   isWebTool,
   modelTools,
   ToolInputError,
@@ -46,6 +49,8 @@ import {
 import { chatMessageReceived } from "./events.js";
 import { reportFailure } from "./failure.js";
 import { chatModel, modelId } from "./model.js";
+import { reminderToolsInstructions } from "./reminder-tools.js";
+import { formatInZone, isValidTimeZone } from "./reminder-schedule.js";
 import { webToolsInstructions } from "./web-tools.js";
 
 // Model calls per user turn, as before. Each is one durable step
@@ -116,7 +121,7 @@ const runTool = async (
   keepLock: KeepLock,
   id: string,
   call: Call,
-  context: { sandboxName: string; platform: Platform; chatId: string }
+  context: { sandboxName: string; platform: Platform; chatId: string; clerkUserId: string }
 ): Promise<ToolResultPart> => {
   const channel = CHANNELS[context.platform];
   const result = (output: ToolOutput): ToolResultPart => ({
@@ -133,6 +138,14 @@ const runTool = async (
       (await step.run(`tool-${id}`, async (): Promise<ToolOutput> => {
         await keepLock();
         try {
+          if (isReminderTool(call.toolName)) {
+            return await executeReminderTool(call.toolName, call.input, {
+              clerkUserId: context.clerkUserId,
+              platform: context.platform,
+              chatId: context.chatId,
+              toolCallId: call.toolCallId,
+            });
+          }
           if (isComputerTool(call.toolName)) {
             return await executeComputerTool(call.toolName as never, call.input, {
               sandboxName: context.sandboxName,
@@ -159,14 +172,24 @@ const runTool = async (
   }
 };
 
-const systemPrompt = (platformName: string) =>
-  [
+const systemPrompt = (platformName: string, timezone: string | null) => {
+  const now = new Date();
+  // Set per turn so relative requests like "tonight" or "this weekend" resolve correctly
+  const zone = timezone && isValidTimeZone(timezone) ? timezone : null;
+  return [
     `You are a helpful, concise personal assistant chatting over ${platformName}.`,
-    // Set per turn so relative requests like "tonight" or "this weekend" resolve correctly
-    `Today is ${new Date().toUTCString()}.`,
+    `Today is ${now.toUTCString()}.`,
+    zone
+      ? `The user's timezone is ${zone}. Their local time is ${formatInZone(now, zone, {
+          dateStyle: "full",
+          timeStyle: "long",
+        })}. Use their local time for dates and times.`
+      : "The user's timezone is not set. Ask which city or timezone they are in before scheduling a reminder, then call setTimezone.",
+    reminderToolsInstructions,
     webToolsInstructions,
     computerToolsInstructions,
   ].join("\n\n");
+};
 
 type Usage = { input: number; output: number; cached: number };
 
@@ -205,9 +228,11 @@ const runAgentTurn = async ({
       await keepLock();
       // Refreshes the typing bubble, which clears itself after about a minute and a half
       await channel.setWorking(chatId, true);
+      // Loaded per model call so a timezone set earlier in the turn is in the next prompt
+      const profile = await loadProfile(clerkUserId);
       const result = await generateText({
         model: chatModel(),
-        system: systemPrompt(channel.platformName),
+        system: systemPrompt(channel.platformName, profile?.timezone ?? null),
         messages: await resolveFiles(dropOldImages(messages, MAX_INLINE_IMAGES), platform, channel),
         tools: modelTools,
         // One model call per step: the turn runs the tools itself
@@ -267,7 +292,12 @@ const runAgentTurn = async ({
     toolCalls += pending.length;
     const results = await Promise.all(
       pending.map((tool) =>
-        runTool(step, keepLock, `${turn}-${i}-${tool.toolCallId}`, tool, { sandboxName, platform, chatId })
+        runTool(step, keepLock, `${turn}-${i}-${tool.toolCallId}`, tool, {
+          sandboxName,
+          platform,
+          chatId,
+          clerkUserId,
+        })
       )
     );
     messages.push({ role: "tool", content: results });
@@ -376,6 +406,8 @@ export const chatTurn = inngest.createFunction(
 
       await step.run(`deliver-${turn}`, async () => {
         await keepLock();
+        // Take the "working…" message down first, so the reply is the only thing left in the chat
+        await CHANNELS[platform].setWorking(replyChatId, false);
         await CHANNELS[platform].sendText(replyChatId, result.reply);
       });
 
@@ -384,7 +416,6 @@ export const chatTurn = inngest.createFunction(
         await keepLock();
         await saveTranscript(conversation, history);
         await markProcessed(inbox.map((row) => row.id));
-        await CHANNELS[platform].setWorking(replyChatId, false);
         // One record per turn, so token use and cost per user stay complete even where traces
         // aren't kept
         log.info("Agent turn finished", {
