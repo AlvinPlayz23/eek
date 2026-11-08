@@ -16,10 +16,10 @@ export function LogoMark({ className = "h-7 w-7" }: { className?: string }) {
 
 export function Logo() {
   return (
-    <a href="/" className="inline-flex items-center gap-2.5" aria-label="Personal Assistant home">
+    <a href="/" className="inline-flex items-center gap-2.5" aria-label="Personal assistant home">
       <LogoMark />
-      <span className="text-[15px] font-semibold tracking-[-0.022em] text-paper-white max-[359px]:hidden">
-        Personal Assistant
+      <span className="whitespace-nowrap text-[15px] font-semibold tracking-[-0.022em] text-paper-white max-[359px]:hidden">
+        Personal assistant
       </span>
     </a>
   );
