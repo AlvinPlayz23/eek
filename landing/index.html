@@ -3,17 +3,26 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#000000" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#171721" media="(prefers-color-scheme: dark)" />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      // Apply the saved (or system) theme before first paint so there is no light flash in dark mode
+      try {
+        var saved = localStorage.getItem("eek-theme");
+        var dark = saved ? saved === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.classList.toggle("dark", dark);
+      } catch (e) {}
+    </script>
     <meta
       name="description"
-      content="Personal Assistant lives in Telegram. Set reminders, draft and send email, browse the web, and use its own Linux computer — all by chatting."
+      content="eek is a personal assistant that lives in Telegram. Set reminders, draft and send email, browse the web, and use its own Linux computer — all by chatting."
     />
     <link rel="icon" type="image/svg+xml" href="/landing/favicon.svg" />
 
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Personal Assistant" />
-    <meta property="og:title" content="Personal Assistant — one chat, handled" />
+    <meta property="og:site_name" content="eek" />
+    <meta property="og:title" content="eek — your life, handled one message at a time" />
     <meta
       property="og:description"
       content="Reminders, email that waits for your confirmation, web browsing, and a Linux computer — in a single Telegram conversation."
@@ -23,14 +32,14 @@
     <meta property="og:image:height" content="630" />
 
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Personal Assistant — one chat, handled" />
+    <meta name="twitter:title" content="eek — your life, handled one message at a time" />
     <meta
       name="twitter:description"
       content="Reminders, email that waits for your confirmation, web browsing, and a Linux computer — in a single Telegram conversation."
     />
     <meta name="twitter:image" content="/landing/og.png" />
 
-    <title>Personal Assistant — reminders, email and a Linux computer on Telegram</title>
+    <title>eek — a personal assistant that lives in Telegram</title>
   </head>
   <body>
     <div id="root"></div>
