@@ -169,3 +169,17 @@ export type Reminder = typeof reminders.$inferSelect;
 export type NewReminder = typeof reminders.$inferInsert;
 
 export type ChatInboxRow = typeof chatInbox.$inferSelect;
+
+// One row per user with a connected Gmail account via Composio (managed OAuth).
+// Stores only the Composio connected-account id; Composio holds and refreshes tokens
+export const gmailConnections = pgTable("gmail_connections", {
+  clerkUserId: text("clerk_user_id").primaryKey(),
+  composioAccountId: text("composio_account_id").notNull(),
+  email: text("email"),
+  status: text("status"),
+  connectedAt: timestamp("connected_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type GmailConnection = typeof gmailConnections.$inferSelect;
+export type NewGmailConnection = typeof gmailConnections.$inferInsert;

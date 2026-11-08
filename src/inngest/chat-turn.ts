@@ -27,9 +27,11 @@ import {
 } from "./agent-messages.js";
 import {
   executeComputerTool,
+  executeGmailTool,
   executeReminderTool,
   executeWebTool,
   isComputerTool,
+  isGmailTool,
   isReminderTool,
   isWebTool,
   modelTools,
@@ -49,6 +51,7 @@ import {
 import { chatMessageReceived } from "./events.js";
 import { reportFailure } from "./failure.js";
 import { chatModel, modelId } from "./model.js";
+import { gmailToolsInstructions } from "./gmail-tools.js";
 import { reminderToolsInstructions } from "./reminder-tools.js";
 import { formatInZone, isValidTimeZone } from "./reminder-schedule.js";
 import { webToolsInstructions } from "./web-tools.js";
@@ -146,6 +149,12 @@ const runTool = async (
               toolCallId: call.toolCallId,
             });
           }
+          if (isGmailTool(call.toolName)) {
+            return await executeGmailTool(call.toolName, call.input, {
+              clerkUserId: context.clerkUserId,
+              toolCallId: call.toolCallId,
+            });
+          }
           if (isComputerTool(call.toolName)) {
             return await executeComputerTool(call.toolName as never, call.input, {
               sandboxName: context.sandboxName,
@@ -186,6 +195,7 @@ const systemPrompt = (platformName: string, timezone: string | null) => {
         })}. Use their local time for dates and times.`
       : "The user's timezone is not set. Ask which city or timezone they are in before scheduling a reminder, then call setTimezone.",
     reminderToolsInstructions,
+    gmailToolsInstructions,
     webToolsInstructions,
     computerToolsInstructions,
   ].join("\n\n");

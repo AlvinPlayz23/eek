@@ -105,6 +105,8 @@ export type UpdateReminderInput = {
   repeat?: RepeatSpec | null;
 };
 
+export type GmailStatus = { connected: boolean; email: string | null };
+
 export class ApiError extends Error {
   readonly status: number;
 
@@ -171,6 +173,9 @@ export const api = {
     }),
   unlinkChannel: (id: string) =>
     request<void>(`/settings/channels/${id}`, { method: "DELETE" }),
+  gmailStatus: () => request<GmailStatus>("/gmail/status"),
+  gmailDisconnect: () => request<{ ok: true }>("/gmail/disconnect", { method: "POST" }),
+  gmailConnectUrl: () => `${BASE}/gmail/connect`,
   deleteData: () =>
     request<{ ok: true }>("/settings/delete", {
       method: "POST",

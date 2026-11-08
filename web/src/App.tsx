@@ -3,6 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import { SignIn } from "@/components/sign-in";
 import { Spinner } from "@/components/ui/spinner";
 import { BillingPage } from "@/pages/billing";
+import { ConnectionsPage } from "@/pages/connections";
 import { OverviewPage } from "@/pages/overview";
 import { RemindersPage } from "@/pages/reminders";
 import { SettingsPage } from "@/pages/settings";
@@ -86,6 +87,8 @@ export function App() {
       ) : null}
 
       {route === "billing" ? <BillingPage /> : null}
+
+      {route === "connections" ? <ConnectionsPage /> : null}
 
       {route === "settings" ? (
         <SettingsPage

@@ -3,6 +3,7 @@ import {
   BellIcon,
   CreditCardIcon,
   LayoutGridIcon,
+  Link2Icon,
   LogOutIcon,
   Settings2Icon,
   SparklesIcon,
@@ -15,6 +16,7 @@ import type { Route } from "@/lib/route";
 const NAV = [
   { route: "overview", label: "Overview", icon: LayoutGridIcon },
   { route: "reminders", label: "Reminders", icon: BellIcon },
+  { route: "connections", label: "Connections", icon: Link2Icon },
   { route: "billing", label: "Billing", icon: CreditCardIcon },
   { route: "settings", label: "Settings", icon: Settings2Icon },
 ] as const satisfies ReadonlyArray<{ route: Route; label: string; icon: React.ElementType }>;

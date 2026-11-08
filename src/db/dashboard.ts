@@ -5,6 +5,7 @@ import {
   chatInbox,
   chatLocks,
   chatTranscripts,
+  gmailConnections,
   reminders,
   userProfiles,
 } from "./schema.js";
@@ -16,6 +17,7 @@ export const deleteUserData = async (clerkUserId: string) => {
   await db.delete(chatInbox).where(eq(chatInbox.clerkUserId, clerkUserId));
   await db.delete(chatLocks).where(eq(chatLocks.clerkUserId, clerkUserId));
   await db.delete(chatTranscripts).where(eq(chatTranscripts.clerkUserId, clerkUserId));
+  await db.delete(gmailConnections).where(eq(gmailConnections.clerkUserId, clerkUserId));
   await db.delete(channelIdentifiers).where(eq(channelIdentifiers.clerkUserId, clerkUserId));
   await db.delete(userProfiles).where(eq(userProfiles.clerkUserId, clerkUserId));
 };
