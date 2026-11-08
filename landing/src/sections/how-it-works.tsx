@@ -1,60 +1,106 @@
 import { Link2, MessageCircle, Sparkles } from "lucide-react";
+import type { ReactNode } from "react";
 import { Container } from "../components/container";
 import { Reveal } from "../components/reveal";
-import { Section } from "../components/section";
-import { SectionHeader } from "../components/section-header";
+
+function Me({ children }: { children: ReactNode }) {
+  return (
+    <span className="self-end rounded-2xl rounded-br-md bg-cobalt px-3 py-1.5 text-[13px] font-medium text-white">
+      {children}
+    </span>
+  );
+}
+
+function Bot({ children }: { children: ReactNode }) {
+  return (
+    <span className="self-start rounded-2xl rounded-bl-md border-2 border-chalk bg-paper px-3 py-1.5 text-[13px] font-medium text-charcoal">
+      {children}
+    </span>
+  );
+}
 
 const steps = [
   {
     icon: MessageCircle,
     title: "Message the bot",
-    copy: "Open Telegram, find @eek_aibot, and say hello. No app to install — the chat is the interface.",
+    copy: "Open Telegram, find @eek_aibot, and say hello. There's nothing to install.",
+    scene: (
+      <>
+        <Me>hi!</Me>
+        <Bot>Hey, I'm ready when you are.</Bot>
+      </>
+    ),
   },
   {
     icon: Link2,
     title: "Link your account",
-    copy: "It replies with a sign-in link. Approve the code on your phone and the chat is bound to your account.",
+    copy: "It replies with a sign-in link. Approve the code on your phone and the chat is linked.",
+    scene: (
+      <>
+        <Bot>Approve this sign-in to link your chat.</Bot>
+        <span className="self-start rounded-full border-2 border-cobalt/25 bg-paper px-3 py-1 font-mono text-[13px] font-medium tracking-[0.2em] text-cobalt">
+          4 7 1 9
+        </span>
+      </>
+    ),
   },
   {
     icon: Sparkles,
     title: "Just chat",
-    copy: "Ask for a reminder, an email, a price check, or a command on its Linux computer. Plain language works.",
+    copy: "Ask for a reminder, an email, a price check or a command on its computer. Plain language works.",
+    scene: (
+      <>
+        <Me>Remind me to call mum at 6</Me>
+        <Bot>Done. Set for 6:00 PM.</Bot>
+      </>
+    ),
   },
 ];
 
+// The page's one light band. Everything here is flat and chunky: chalk borders with a thick
+// bottom lip, a wash-blue stage per step, and cobalt as the only colour
 export function HowItWorks() {
   return (
-    <Section aria-label="How it works">
-      <Container>
-        <Reveal>
-          <SectionHeader
-            eyebrow="How it works"
-            line1="From hello to handled"
-            line2="in about a minute."
-          >
-            No onboarding wizard, no new app. The assistant meets you where you already are.
-          </SectionHeader>
-        </Reveal>
+    <section id="how" aria-labelledby="how-title" className="py-12 md:py-16">
+      <div className="mx-3 rounded-4xl bg-paper px-4 py-16 md:mx-6 md:px-6 md:py-24">
+        <Container className="px-0 lg:px-0">
+          <Reveal>
+            <h2 id="how-title" className="headline-section mx-auto max-w-2xl text-center font-semibold">
+              <span className="block text-charcoal">From hello to handled</span>
+              <span className="block text-cobalt">In about a minute</span>
+            </h2>
+          </Reveal>
 
-        <div className="mt-12 grid gap-3 md:grid-cols-3">
-          {steps.map((step, index) => (
-            <Reveal key={step.title} delay={index * 70} className="h-full">
-              <div className="flex h-full flex-col rounded-lg border border-fog/10 bg-surface-one p-6">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="grid h-9 w-9 place-items-center rounded-md border border-fog/10 bg-surface-two">
-                    <step.icon className="h-4 w-4 text-paper-white" aria-hidden="true" />
-                  </span>
-                  <span className="rounded-full border border-fog/15 px-2.5 py-1 text-caption font-medium text-steel">
-                    Step 0{index + 1}
-                  </span>
-                </div>
-                <h3 className="mt-6 text-heading-sm text-paper-white">{step.title}</h3>
-                <p className="mt-2 text-body text-mid-gray">{step.copy}</p>
-              </div>
-            </Reveal>
-          ))}
-        </div>
-      </Container>
-    </Section>
+          <ol className="mt-12 grid gap-4 md:mt-16 md:grid-cols-3 md:gap-5">
+            {steps.map((step, index) => (
+              <li key={step.title}>
+                <Reveal delay={index * 90} className="h-full">
+                  <div className="sticker h-full rounded-2xl bg-paper p-4">
+                    <div
+                      aria-hidden="true"
+                      className="flex h-36 flex-col justify-center gap-2 rounded-xl bg-wash p-4"
+                    >
+                      {step.scene}
+                    </div>
+                    <div className="px-2 pb-3 pt-5">
+                      <div className="flex items-center gap-3">
+                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-cobalt font-mono text-sm font-semibold text-white">
+                          {index + 1}
+                        </span>
+                        <h3 className="flex items-center gap-2 text-[17px] font-semibold text-charcoal">
+                          {step.title}
+                          <step.icon className="h-4 w-4 text-cobalt" aria-hidden="true" />
+                        </h3>
+                      </div>
+                      <p className="mt-3 text-body text-pencil">{step.copy}</p>
+                    </div>
+                  </div>
+                </Reveal>
+              </li>
+            ))}
+          </ol>
+        </Container>
+      </div>
+    </section>
   );
 }

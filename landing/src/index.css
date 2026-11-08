@@ -1,99 +1,92 @@
 @import "tailwindcss";
 
-/* Morphic — dark cinema canvas.
- * Pure black absorbs everything except the electric-blue pulse of the single accent.
- * The surface stack is the only depth; there are no gradients and no component shadows. */
+/* Alpine blue hour: Mercury's onyx canvas and single cobalt action, Linear's hairlines and tight
+ * Inter, and one Duolingo-style paper band with chunky sticker cards for contrast.
+ * Depth comes from the surface stack and 1px hairlines, not shadows. */
 @theme {
-  /* Surfaces — the only four levels. Never add a shade between them */
-  --color-pure-black: #000000;
-  --color-surface-one: #212121;
-  --color-surface-two: #292929;
-  --color-surface-three: #333333;
+  /* Surfaces */
+  --color-onyx: #171721;
+  --color-surface-one: #1e1e2a;
+  --color-surface-two: #272735;
+  --color-surface-three: #33334a;
 
   /* Ink */
-  --color-paper-white: #ffffff;
-  --color-mist: #f5f5f5;
-  --color-mid-gray: #999999;
-  --color-steel: #737373;
-  --color-graphite: #666666;
-  --color-slate: #525252;
-  --color-charcoal: #404040;
-  --color-fog: #e5e7eb;
+  --color-ivory: #ededf3;
+  --color-mist: #d6d7e3;
+  --color-ash: #b3b4c2;
+  --color-steel: #8b8d9d;
+  --color-graphite: #5f6173;
+  --color-fog: #e2e3ed;
 
-  /* The only chromatic accent in the system */
-  --color-electric-blue: #0075ff;
+  /* The only chromatic action on the dark canvas */
+  --color-cobalt: #5266eb;
 
-  /* Inter carries every weight and size. Geist/system are the documented fallbacks */
+  /* Paper band: the light, playful counterpoint */
+  --color-paper: #ffffff;
+  --color-chalk: #e5e5ee;
+  --color-charcoal: #3f3f4a;
+  --color-pencil: #6b6b76;
+  --color-wash: #eef0ff;
+
   --font-sans: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     sans-serif;
 
-  /* Type scale */
-  --text-caption: 10px;
+  --text-caption: 11px;
   --text-caption--line-height: 1.4;
-  --text-caption--letter-spacing: -0.01em;
+  --text-caption--letter-spacing: 0.01em;
 
-  --text-body: 14px;
-  --text-body--line-height: 1.5;
-  --text-body--letter-spacing: -0.01em;
+  --text-body: 15px;
+  --text-body--line-height: 1.55;
+  --text-body--letter-spacing: -0.011em;
 
   --text-body-lg: 18px;
-  --text-body-lg--line-height: 1.45;
-  --text-body-lg--letter-spacing: -0.022em;
+  --text-body-lg--line-height: 1.5;
+  --text-body-lg--letter-spacing: -0.014em;
 
   --text-heading-sm: 20px;
   --text-heading-sm--line-height: 1.33;
-  --text-heading-sm--letter-spacing: -0.022em;
-  --text-heading-sm--font-weight: 600;
+  --text-heading-sm--letter-spacing: -0.014em;
+  --text-heading-sm--font-weight: 560;
 
-  --text-heading: 40px;
-  --text-heading--line-height: 1.15;
-  --text-heading--letter-spacing: -0.048em;
-  --text-heading--font-weight: 700;
-
-  --text-display: 52px;
-  --text-display--line-height: 1.15;
-  --text-display--letter-spacing: -0.062em;
-  --text-display--font-weight: 700;
-
-  /* Radii — 7 buttons/badges · 10 cards · 16 large cards · 24 modals · 100 pills */
-  --radius-md: 7px;
-  --radius-lg: 10px;
+  /* Radii: 12 cards (Mercury and Linear agree) · 16 large cards · 40 paper band · pills */
+  --radius-md: 8px;
+  --radius-lg: 12px;
   --radius-2xl: 16px;
   --radius-3xl: 24px;
-  --radius-4xl: 32px;
-  --radius-full: 100px;
+  --radius-4xl: 40px;
+  --radius-full: 9999px;
 
-  /* The one shadow in the system, reserved for image cards */
-  --shadow-xl: rgba(0, 0, 0, 0.1) 0px 20px 25px -5px, rgba(0, 0, 0, 0.1) 0px 8px 10px -6px;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
 }
 
 @layer base {
   html {
-    background-color: var(--color-pure-black);
+    background-color: var(--color-onyx);
     color-scheme: dark;
     scroll-behavior: smooth;
-    scroll-padding-top: 88px;
+    scroll-padding-top: 96px;
   }
 
   body {
     margin: 0;
     overflow-x: clip;
-    background-color: var(--color-pure-black);
-    color: var(--color-mid-gray);
+    background-color: var(--color-onyx);
+    color: var(--color-ash);
     font-family: var(--font-sans);
-    font-feature-settings: "cv11" 1, "ss01" 1;
+    font-feature-settings: "cv01" 1, "ss03" 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
   }
 
   ::selection {
-    background-color: var(--color-electric-blue);
-    color: var(--color-paper-white);
+    background-color: var(--color-cobalt);
+    color: #fff;
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-electric-blue);
+    outline: 2px solid var(--color-cobalt);
     outline-offset: 3px;
   }
 
@@ -101,7 +94,7 @@
   h2,
   h3,
   h4 {
-    color: var(--color-paper-white);
+    color: var(--color-ivory);
     text-wrap: balance;
   }
 
@@ -109,8 +102,8 @@
     text-wrap: pretty;
   }
 
-  summary::-webkit-details-marker {
-    display: none;
+  button {
+    cursor: pointer;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -121,26 +114,163 @@
 }
 
 @layer components {
-  /* Two-tone display type: statement in white, context in mid gray, same size and weight */
+  /* Two-tone display type: statement in ivory, context in steel, same size and weight */
   .headline-display {
-    font-size: clamp(2.6rem, 5.4vw, 3.25rem);
-    line-height: 1.12;
-    letter-spacing: -0.062em;
-    font-weight: 700;
+    font-size: clamp(2.6rem, 6vw, 4.25rem);
+    line-height: 1.05;
+    letter-spacing: -0.035em;
+    font-weight: 520;
   }
 
   .headline-section {
-    font-size: clamp(2rem, 4.2vw, 2.5rem);
-    line-height: 1.15;
-    letter-spacing: -0.048em;
-    font-weight: 700;
+    font-size: clamp(2rem, 4.4vw, 3rem);
+    line-height: 1.08;
+    letter-spacing: -0.03em;
+    font-weight: 520;
+  }
+
+  /* Solid card: the surface step plus a hairline inset shimmer, no border property */
+  .obsidian {
+    background-color: var(--color-surface-one);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.06),
+      inset 0 0 0 1px rgb(255 255 255 / 0.03);
+  }
+
+  /* Frosted card: translucent surface that blurs whatever it overlaps. Only for objects that
+   * float over other content; the shadow keeps them lifted off the thing underneath */
+  .glass {
+    background-color: rgb(39 39 53 / 0.55);
+    -webkit-backdrop-filter: blur(16px) saturate(1.6);
+    backdrop-filter: blur(16px) saturate(1.6);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.1),
+      inset 0 0 0 1px rgb(255 255 255 / 0.04),
+      0 24px 48px -16px rgb(8 8 14 / 0.7);
+  }
+
+  /* Hairline edge: a 1px ring, brightest along the top */
+  .sheen {
+    position: relative;
+  }
+
+  .sheen::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    padding: 1px;
+    border-radius: inherit;
+    background: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 0.16),
+      rgb(255 255 255 / 0.05) 45%,
+      rgb(255 255 255 / 0.04)
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      linear-gradient(#000 0 0) content-box exclude,
+      linear-gradient(#000 0 0);
+    pointer-events: none;
+  }
+
+  /* Cursor-following highlight; --mx and --my are set from pointer events */
+  .spot::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(
+      260px circle at var(--mx, 50%) var(--my, 0%),
+      rgb(255 255 255 / 0.08),
+      transparent 65%
+    );
+    opacity: 0;
+    transition: opacity 300ms var(--ease-out);
+    pointer-events: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .spot:hover::after {
+      opacity: 1;
+    }
+  }
+
+  /* Duolingo-style sticker card: flat fill, chunky border with a thicker bottom lip */
+  .sticker {
+    border: 2px solid var(--color-chalk);
+    border-bottom-width: 5px;
+  }
+
+  .footer-word {
+    color: var(--color-surface-one);
+    user-select: none;
   }
 }
 
 @keyframes rise {
   from {
     opacity: 0;
-    transform: translateY(22px);
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--card-x, 0px), 10px, 0) scale(0.96);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: blur(0);
+  }
+}
+
+@keyframes typing {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes swap-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
@@ -149,19 +279,24 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  /* One orchestrated page load for the hero */
+  /* The single orchestrated page load: headline first, support after, the stage last */
   .rise {
-    animation: rise 800ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: rise 800ms var(--ease-out) both;
     animation-delay: var(--rise-delay, 0ms);
   }
 
-  /* Scroll-in for the sections below the fold */
+  .fade-in {
+    animation: fade 900ms var(--ease-out) both;
+    animation-delay: var(--rise-delay, 0ms);
+  }
+
+  /* Scroll-in for panels below the fold */
   .reveal {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(16px);
     transition:
-      opacity 700ms cubic-bezier(0.22, 1, 0.36, 1),
-      transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+      opacity 700ms var(--ease-out),
+      transform 700ms var(--ease-out);
     transition-delay: var(--reveal-delay, 0ms);
   }
 
@@ -169,14 +304,73 @@
     opacity: 1;
     transform: translateY(0);
   }
-}
 
-@media (prefers-reduced-motion: reduce) {
-  .rise,
-  .reveal {
-    animation: none !important;
-    opacity: 1 !important;
-    transform: none !important;
-    transition: none !important;
+  /* Section headlines: the first line lands, the second echoes it a beat later */
+  .hl-line {
+    opacity: 0;
+    transform: translateY(14px);
+    transition:
+      opacity 700ms var(--ease-out),
+      transform 700ms var(--ease-out);
+    transition-delay: var(--line-delay, 0ms);
+  }
+
+  [data-visible="true"] .hl-line {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .msg-in {
+    animation: msg-in 280ms var(--ease-out) both;
+  }
+
+  /* Result cards come out of the chat. The fill mode is `backwards` on purpose: a retained
+   * filter would turn this element into a backdrop root and switch its blur off */
+  .card-in {
+    animation: card-in 520ms var(--ease-out) backwards;
+  }
+
+  @media (min-width: 1024px) {
+    .card-in[data-slot="left"] {
+      --card-x: 28px;
+    }
+
+    .card-in[data-slot="right"] {
+      --card-x: -28px;
+    }
+  }
+
+  .typing-dot {
+    animation: typing 1.1s ease-in-out infinite;
+    animation-delay: var(--dot-delay, 0ms);
+  }
+
+  .swap-in {
+    animation: swap-in 420ms var(--ease-out) both;
+  }
+
+  .tab-swap {
+    animation: fade 220ms var(--ease-out) both;
+  }
+
+  /* Rails draw left to right when their step list scrolls into view */
+  .rail-fill {
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 900ms var(--ease-in-out);
+    transition-delay: var(--rail-delay, 0ms);
+  }
+
+  [data-visible="true"] .rail-fill {
+    transform: scaleX(1);
+  }
+
+  .word-rise {
+    transform: translateY(32%);
+    transition: transform 1100ms var(--ease-out);
+  }
+
+  [data-visible="true"] .word-rise {
+    transform: translateY(0);
   }
 }
