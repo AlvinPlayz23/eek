@@ -1,11 +1,11 @@
-import { ChatPreview } from "./sections/chat-preview";
+import { FinalCta } from "./sections/final-cta";
 import { Faq } from "./sections/faq";
-import { Features } from "./sections/features";
 import { Hero } from "./sections/hero";
 import { HowItWorks } from "./sections/how-it-works";
 import { Pricing } from "./sections/pricing";
 import { SiteFooter } from "./sections/site-footer";
 import { SiteHeader } from "./sections/site-header";
+import { Trust } from "./sections/trust";
 
 export default function App() {
   return (
@@ -19,11 +19,11 @@ export default function App() {
       <SiteHeader />
       <main id="main">
         <Hero />
+        <Trust />
         <HowItWorks />
-        <Features />
-        <ChatPreview />
         <Pricing />
         <Faq />
+        <FinalCta />
       </main>
       <SiteFooter />
     </div>
